@@ -63,7 +63,7 @@ The standalone imported module at `firmware/dumps/mt8163/kernel/cd3313.ko` and t
 - standalone dump: 183,368 bytes; SHA-256 `b9ef172de1532867208fc620d4fe8d24612aa2ee4ad2d62ab2daaf6622387afb`; Build ID `dae15c9eb019e9388d15cb88088c202d017ebcf0`
 - archive member: 188,520 bytes; SHA-256 `6a96207794c770d05a9ba6981a25af9868f38ebac0391c1c6461cd20ed394594`; Build ID `e08637c02ef9a8c5077bb9ee12fd4b76dfb91d56`
 
-These are two distinct driver builds. A section-level and symbol-level binary diff is still pending; do not use the two copies interchangeably.
+These are two distinct driver builds. The standalone reference is a publisher26 build; the vendor archive module is a publisher28 build matching the supplied firmware fingerprint and the `/vendor/lib/modules/cd3313.ko` init path. A detailed function-level comparison is recorded in [CD3313 module variant comparison](CD3313_MODULE_VARIANT_DIFF.md).
 
 ### F-03 — Bluetooth SCO microphone profile uses an output channel mask
 
@@ -88,7 +88,7 @@ If both init paths are used in different boot/factory modes, the DSP channel gai
 
 The JNI layer references `ro.hw.dsp.chip`, but this property is not present in either imported `build.prop` or `default.prop`, and neither init script sets it. It may be set by another partition or a vendor property service not present in this dump; verify before designing automatic chip selection.
 
-## 4. Duplicate inputs
+### F-08 — Vendor CD3313 build fixes two I2C write-cache problems\n\nThe vendor archive module adds exact one-byte I2C transfer-result checks, up to five retries with 20 ms delays, and updates its register cache only after a successful transfer in both `cd3313_write_reg` and raw `cmd_write`. The older standalone reference sends once and updates cache without validating the exact transfer length. This earlier bug finding must not be attributed to the vendor module. See the [binary comparison](CD3313_MODULE_VARIANT_DIFF.md).\n\n## 4. Duplicate inputs
 
 - `AudioParamOptions.xml` appears in two vendor paths with identical SHA-256.
 - `audio.primary.mt8163.so` appears in both `files2` and `vendor_lib` with identical SHA-256.
@@ -98,7 +98,7 @@ These are duplicate copies, not separate implementations.
 
 ## 5. Next analysis sequence
 
-1. Compare both CD3313 module builds (ELF sections, Build IDs, symbols, ioctl handlers, I2C address and GPIO behavior).
+1. Review the confirmed CD3313 variant differences and continue semantic analysis of ioctl payload validation, volume/EQ and event paths.
 2. Determine which DSP chip is selected on this board from DT/DTBO, module probe logs and `ro.hw.dsp.chip` provisioning.
 3. Map all `/dev/audiomux` clients and their command payloads: AudioFlinger, AudioPolicy, ExtAudioMuxer JNI and each kernel driver.
 4. Map primary HAL PCM devices, ALSA mixer controls and XML routes to the actual MT8163 sound-card topology.
