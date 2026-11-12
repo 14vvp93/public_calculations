@@ -1,0 +1,108 @@
+# MT8163 audio stack — first-pass findings
+
+Date: 2026-11-12  
+Source repository: `14march93/mt8163_audio_engine`  
+Source commit imported: `44e132c8ac299ebfd58831232ec6b6f64ae8f769`  
+Extraction workflow: [run 43205114889](https://github.com/14vvp93/public_calculations/actions/runs/43205114889)  
+Extraction artifact: `public-compute-extract-43205114889` (14-day retention; expires 2026-11-26)
+
+## 1. Extraction result
+
+All four split archive sets were reassembled, CRC-checked and extracted successfully. The 26 source volumes were inventoried as split-ZIP volumes and retained unchanged.
+
+| Archive set | Files | Expanded bytes |
+|---|---:|---:|
+| `files2.zip` | 324 | 128,875,776 |
+| `HEQ.zip` | 1 | 168,811,733 |
+| `lib.zip` | 766 | 184,791,172 |
+| `vendor_lib.zip` | 325 | 104,706,028 |
+| **Total** | **1,416** | **587,184,709** |
+
+No archive-set extraction errors were reported. The artifact contains the per-member SHA-256 manifest, archive-volume inventory, Markdown summary and extracted tree. The artifact is temporary; the original input volumes remain in the repository.
+
+## 2. Confirmed Android audio architecture
+
+### Android-facing HAL and PCM path
+
+- `android.hardware.audio@4.0-service-mediatek` is configured as the vendor HIDL Audio HAL service. Its init service runs as `audioserver` and advertises `android.hardware.audio@4.0::IDevicesFactory/default`.
+- `android.hardware.audio@4.0-impl-mediatek.so` is a 32-bit ARM / Android 28 HIDL implementation and depends on `vendor.mediatek.hardware.audio@4.1.so` plus Android HIDL/audio libraries.
+- `audio.primary.mt8163.so` is a 32-bit ARM / Android 28 shared object. Its dependency set includes TinyALSA/TinyCompress, ALSA utilities, MediaTek resampling and audio component libraries, audio settings, DCR filter and audio toolkit components.
+- The primary HAL contains PCM and mixer-control paths (including TinyALSA calls and controls such as speaker/headset amplifiers, ADC switches and sidetone). This is the main PCM/mixer integration surface to map before replacing vendor behavior.
+
+### External DSP / audio-mux path
+
+Static strings and symbols establish an additional control path outside the primary HAL:
+
+- `libaudioflinger.so` references `/dev/audiomux` and `/dev/carstatus`; it contains the diagnostic string `setAudioOutputMute Mute:%d, carstatus fd %d, audiomux fd %d`.
+- `libaudiopolicymanagerdefault.so` also references both device nodes and has a separate `setAudioOutputMuteTimeout` path.
+- `libcarservices_jni.so` registers `android/sourceservice/ExtAudioMuxer`, exposes JNI method `SendCmdAudioMux(I[I)I`, reads property `ro.hw.dsp.chip`, and references `/dev/audiomux`.
+- The kernel modules `cd3313.ko`, `ak7604.ko` and `fy7604.ko` each contain an `audiomux` misc-device registration path and a registration-failure diagnostic.
+
+This means AudioFlinger, AudioPolicy and the car-services JNI layer all participate in or depend on the external DSP/mute control path. A replacement must centralize ownership and serialize commands; it must not leave factory and replacement components independently controlling the same hardware.
+
+## 3. Important findings to investigate
+
+### F-01 — Three DSP drivers are loaded unconditionally
+
+The imported `firmware/dumps/mt8163/init.mt8163.rc` loads, in sequence:
+
+1. `carstatus.ko`
+2. `cd3313.ko`
+3. `ak7604.ko`
+4. `fy7604.ko`
+
+Both `factory_init.rc` and `init.mt8163.rc` include the three DSP modules. All three DSP modules contain the `audiomux` misc-device name and registration code markers. They also expose overlapping mute/subwoofer GPIO naming.
+
+This is a high-priority probe/ownership question, not yet a proven collision: the actual I2C client matching and which physical DSP responds must be established from the device tree, module probe paths and runtime logs. Do not assume all three drivers are active on the same board simply because all three are inserted.
+
+### F-02 — Two CD3313 module copies differ
+
+The standalone imported module at `firmware/dumps/mt8163/kernel/cd3313.ko` and the `vendor_lib.zip` member `lib/modules/cd3313.ko` have the same filename and size (183,368 bytes) but different SHA-256 values:
+
+- standalone dump: `b9ef172de1532867208fc620d4fe8d24612aa2ee4ad2d62ab2daaf6622387afb`
+- archive member: `6a96207794c770d05a9ba6981a25af9868f38ebac0391c1c6461cd20ed394594`
+
+The archive member has Build ID `e08637c02ef9a8c5077bb9ee12fd4b76dfb91d56`. These must be treated as two distinct driver builds until the standalone dump is inspected and compared. Do not use the two copies interchangeably.
+
+### F-03 — Bluetooth SCO microphone profile uses an output channel mask
+
+In `files2/files2/vendor/audio_policy_configuration.xml`, the device port `BT SCO Headset Mic` has role `source` (input) but declares `AUDIO_CHANNEL_OUT_STEREO` at 8/16 kHz. This is inconsistent with an input profile and should be checked against the active AudioPolicy parser and the matching system configuration.
+
+### F-04 — Audio policy references an absent include
+
+Both extracted system/vendor `audio_policy_configuration.xml` files include `default_volume_tables.xml`, but that file is absent from the complete extracted tree. Other included policy fragments are present. Determine whether this is an incomplete firmware snapshot or a genuine runtime policy-configuration defect.
+
+### F-05 — Mixer XML contains suspicious text and a duplicate control
+
+`files2/files2/vendor/audio_device.xml` parses as XML, but 22 path elements contain 24 stray literal `>` text characters after self-closing `kctl` elements. The `builtin_Mic_Mic3/turnoff` path also sets `Audio_ADC_3_Switch=Off` twice. This may be ignored by the vendor XML consumer, but it is worth checking rather than silently cleaning the source.
+
+### F-06 — AK7604 default gain differs by init path
+
+- `init.mt8163.rc`: `ro.hw.ak7604.gain` fallback is `-2,-2,2,0`.
+- `factory_init.rc`: fallback is `-2,-2,1,0`.
+
+If both init paths are used in different boot/factory modes, the DSP channel gain defaults diverge.
+
+### F-07 — DSP chip selector property not found in the imported property files
+
+The JNI layer references `ro.hw.dsp.chip`, but this property is not present in the imported `build.prop` or `default.prop`. It may be set by another partition or init script not present in this dump; verify before designing automatic chip selection.
+
+## 4. Duplicate inputs
+
+- `AudioParamOptions.xml` appears in two vendor paths with identical SHA-256.
+- `audio.primary.mt8163.so` appears in both `files2` and `vendor_lib` with identical SHA-256.
+- `android.hardware.audio@4.0-impl-mediatek.so` also appears in both locations with identical SHA-256.
+
+These are duplicate copies, not separate implementations.
+
+## 5. Next analysis sequence
+
+1. Compare both CD3313 module builds (ELF sections, Build IDs, symbols, ioctl handlers, I2C address and GPIO behavior).
+2. Determine which DSP chip is selected on this board from DT/DTBO, module probe logs and `ro.hw.dsp.chip` provisioning.
+3. Map all `/dev/audiomux` clients and their command payloads: AudioFlinger, AudioPolicy, ExtAudioMuxer JNI and each kernel driver.
+4. Map primary HAL PCM devices, ALSA mixer controls and XML routes to the actual MT8163 sound-card topology.
+5. Record confirmed factory defects separately from configuration anomalies and unknown hardware assumptions.
+
+## Scope and confidence
+
+This is static analysis of the imported firmware snapshot and extracted binaries. No live device was accessed, no module was loaded, and no hardware registers or GPIOs were changed. Findings F-01, F-04, F-05 and F-07 require additional confirmation; F-02 is a verified hash difference; F-03 is a concrete input/output channel-mask inconsistency in the XML; F-06 is a verified init-file discrepancy.
