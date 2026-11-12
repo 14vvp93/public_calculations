@@ -2,7 +2,6 @@ name: Decompile and inspect HEQ
 
 on:
   workflow_call:
-    inputs:
 permissions:
   contents: read
 
