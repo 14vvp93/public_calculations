@@ -12,7 +12,7 @@ The initial worker is started manually with `workflow_dispatch`. Its `task`
 input selects a bounded operation:
 
 - `inventory`: hash and inventory supported firmware archives.
-- `extract`: safe extraction into a temporary workspace and manifest generation.
+- `extract`: numeric reassembly of multipart ZIP volumes, CRC validation, path/symlink/duplicate checks, extraction into a temporary workspace, and manifest generation.
 - `elf-audit`: inspect ELF files when the required host tools are available.
 - `all-light`: run inventory and static repository checks without committing output.
 
