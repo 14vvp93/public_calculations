@@ -29,8 +29,9 @@ jobs:
           persist-credentials: false
       - name: Extract every complete reference ZIP set
         run: |
+          mkdir -p output/repository-audit
           python3 source/scripts/repository/prepare_reference_archives.py \
-            --root . \
+            --root source \
             --extract-root "$RUNNER_TEMP/mt8163-reference-expanded" \
             --markdown output/repository-audit/ARCHIVE_INVENTORY.md \
             --json output/repository-audit/archive-inventory.json
@@ -52,7 +53,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: mt8163-reference-materials-expanded
-          path: ${{ runner.temp }}/mt8163-reference-expanded/
+          path: |
+            ${{ runner.temp }}/mt8163-reference-expanded/
+            source/reference-materials/extracted/
           if-no-files-found: error
           compression-level: 1
           retention-days: 30
