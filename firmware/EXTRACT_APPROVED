@@ -4,3 +4,5 @@
 # Output: GitHub Actions artifact; source archives remain unchanged
 
 # Trigger revision: safe archive-root default applied
+
+# Trigger revision: split ZIP inventory classification fixed
