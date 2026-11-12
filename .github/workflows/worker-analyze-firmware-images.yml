@@ -8,9 +8,6 @@ on:
         required: false
         type: string
         default: main
-    secrets:
-      SOURCE_REPO_READ_TOKEN:
-        required: false
 permissions:
   contents: read
 
@@ -18,24 +15,16 @@ jobs:
   inspect:
     runs-on: ubuntu-24.04
     steps:
-      - name: Validate read-only access to primary repository
-        env:
-          SOURCE_TOKEN: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "$SOURCE_TOKEN" ]; then
-            echo "::error::Add SOURCE_REPO_READ_TOKEN to the caller repository's Actions secrets. It must be a fine-grained token with Contents: Read-only access to 14vvp93/mt8163_audio_engine."
-            exit 2
-          fi
-
-      - name: Check out primary repository at requested revision
-        uses: actions/checkout@v5
+      - name: Checkout public firmware dataset
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: 14vvp93/mt8163_audio_engine
-          ref: ${{ inputs.source_ref }}
-          token: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
-          path: source
+          repository: 14vvp93/public_calculations
+          ref: main
+          path: worker
           persist-credentials: false
+
+
+
       - name: Install inspection tools
         run: |
           sudo apt-get update
@@ -53,7 +42,7 @@ jobs:
           report=image-analysis/REPORT.txt
           : > "$report"
 
-          for image in source/reference-materials/firmware-dumps/dtbo.img source/reference-materials/firmware-dumps/recovery.img source/reference-materials/firmware-dumps/boot.img; do
+          for image in worker/firmware/dumps/mt8163/dtbo.img worker/firmware/dumps/mt8163/recovery.img worker/firmware/dumps/mt8163/boot.img; do
             if [ -f "$image" ]; then
               {
                 echo "===== $image ====="
@@ -71,7 +60,7 @@ jobs:
           import struct
           from pathlib import Path
 
-          p = Path("source/reference-materials/firmware-dumps/dtbo.img")
+          p = Path("worker/firmware/dumps/mt8163/dtbo.img")
           if not p.exists():
               print("DTBO image not found")
               raise SystemExit(0)
@@ -110,7 +99,7 @@ jobs:
             } | tee -a "$report"
           done
 
-          for image in source/reference-materials/firmware-dumps/recovery.img source/reference-materials/firmware-dumps/boot.img; do
+          for image in worker/firmware/dumps/mt8163/recovery.img worker/firmware/dumps/mt8163/boot.img; do
             [ -f "$image" ] || continue
             name=$(basename "$image" .img)
             out="image-analysis/unpacked/$name"
