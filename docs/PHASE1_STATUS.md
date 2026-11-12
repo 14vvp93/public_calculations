@@ -15,13 +15,14 @@ Last updated: 2026-11-12
 - Verified all 48 imported files against the source-to-destination manifest: no missing files or size mismatches.
 - Reassembled, CRC-checked and extracted all four archive sets successfully: 1,416 files and 587,184,709 expanded bytes.
 - Audited the retained source workflows for portability and recorded the migration map.
-- Added the first-pass audio-stack report with confirmed architecture evidence and prioritized investigation items.
+- Added the first-pass audio-stack report and a repeatable ELF/module/XML inventory script. The script compares both CD3313 builds, scans `/dev/audiomux` references and checks AudioPolicy/init configuration.
 
 ## Verification runs
 
-- [Infrastructure validation — run 43205101804](https://github.com/14vvp93/public_calculations/actions/runs/43205101804) — success.
+- [Infrastructure validation — run 43206534636](https://github.com/14vvp93/public_calculations/actions/runs/43206534636) — success.
 - [Firmware import — run 43204393764](https://github.com/14vvp93/public_calculations/actions/runs/43204393764) — success.
 - [Archive inventory and extraction — run 43205114889](https://github.com/14vvp93/public_calculations/actions/runs/43205114889) — success.
+- [Audio-stack static inventory — run 43206552330](https://github.com/14vvp93/public_calculations/actions/runs/43206552330) — success.
 
 The extraction run produced artifact `public-compute-extract-43205114889`, containing:
 - `archive-inventory.json` — SHA-256 inventory of the 26 original split volumes;
@@ -43,7 +44,7 @@ The artifact has 14-day retention and expires on 2026-11-26. Original source arc
 
 ## First-pass audio findings
 
-See [MT8163 audio stack — first-pass findings](../reports/MT8163_AUDIO_STACK_FIRST_PASS.md).
+See [MT8163 audio stack — first-pass findings](../reports/MT8163_AUDIO_STACK_FIRST_PASS.md). The automated report also records the distinct standalone/vendor `cd3313.ko` builds, the SCO input channel-mask mismatch, missing AudioPolicy include, mixer XML anomalies and init-property discrepancies.
 
 Highest-priority follow-ups:
 1. Compare the two distinct `cd3313.ko` builds found in the standalone dump and `vendor_lib.zip`.
