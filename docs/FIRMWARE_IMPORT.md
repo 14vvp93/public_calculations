@@ -22,6 +22,8 @@ include standalone raw dumps. The workflow imports:
 - split HEQ archive volumes from `reference-materials/heq/`;
 - the original `cd3313.ko` reference module.
 
+The current source tree contains 48 approved firmware files totaling 393,831,964 bytes (about 375.6 MiB): 30 files under `firmware-dumps`, 17 HEQ split volumes, and the 183,368-byte CD3313 module. The largest individual volume is 25,165,824 bytes, below GitHub's 100 MiB normal-blob limit. The import preserves these files byte-for-byte.
+
 The workflow records the exact source commit, file sizes and SHA-256 hashes in
 `firmware/manifests/mt8163-source-import.json`, then commits the public inputs to
 `main`. It does not modify or delete anything in the private source repository.
