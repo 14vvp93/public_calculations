@@ -114,7 +114,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          MODULE="$(find firmware-analysis -type f -path '*/vendor_lib/lib/modules/cd3313.ko' -print -quit)"
+          MODULE="$(find firmware-analysis -type f -path '*/vendor/lib/modules/cd3313.ko' -print -quit)"
           test -n "$MODULE"
           OUT=firmware-analysis/cd3313-current
           mkdir -p "$OUT"
@@ -262,7 +262,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SRC=firmware-analysis/vendor_lib/lib/modules
+          SRC=firmware-analysis/vendor/lib/modules
           OUT=firmware-analysis/fm-tuner-drivers
           mkdir -p "$OUT"
           for module in fmradio_drv qn8027 qn8035 si475x tda7708LX wmt_drv; do
@@ -376,7 +376,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SRC=firmware-analysis/lib/lib/libaudiopolicycustomextensions.so
+          SRC=firmware-analysis/system/lib/libaudiopolicycustomextensions.so
           OUT=firmware-analysis/board-audio-routing/policy-extension
           if [ ! -f "$SRC" ]; then
             echo "Policy extension binary not found at $SRC" > firmware-analysis/board-audio-routing/policy-extension-status.txt
