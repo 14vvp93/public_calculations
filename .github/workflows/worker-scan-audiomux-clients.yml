@@ -3,11 +3,6 @@ name: Scan extracted firmware for CD3313 userspace clients
 on:
   workflow_call:
     inputs:
-      source_ref:
-        description: Immutable branch, tag, or commit in the primary repository
-        required: false
-        type: string
-        default: main
 permissions:
   contents: read
 
