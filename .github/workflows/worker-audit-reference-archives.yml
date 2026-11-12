@@ -1,82 +1,94 @@
-name: Audit and extract reference archives
+name: Audit public extracted firmware integrity
 
 on:
   workflow_call:
-    inputs:
-      source_ref:
-        description: Immutable branch, tag, or commit in the primary repository
-        required: false
-        type: string
-        default: main
-    secrets:
-      SOURCE_REPO_READ_TOKEN:
-        required: false
+
 permissions:
   contents: read
 
 jobs:
-  extract-and-inventory:
+  verify-firmware:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
-      - name: Validate read-only access to primary repository
-        env:
-          SOURCE_TOKEN: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
+      - name: Checkout public firmware dataset
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 14vvp93/public_calculations
+          ref: main
+          path: worker
+          persist-credentials: false
+
+      - name: Verify all extracted firmware files against SHA-256 manifest
+        shell: bash
         run: |
           set -euo pipefail
-          if [ -z "$SOURCE_TOKEN" ]; then
-            echo "::error::Add SOURCE_REPO_READ_TOKEN to the caller repository's Actions secrets. It must be a fine-grained token with Contents: Read-only access to 14vvp93/mt8163_audio_engine."
-            exit 2
-          fi
+          mkdir -p output/firmware-audit
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, sys
+          root = Path("worker")
+          manifest_path = root / "firmware/manifests/mt8163-extracted.json"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          entries = manifest["files"]
+          failures = []
+          rows = []
+          for item in entries:
+              path = root / item["path"]
+              if not path.is_file():
+                  failures.append(f"MISSING {item['path']}")
+                  continue
+              if path.stat().st_size != item["size"]:
+                  failures.append(f"SIZE_MISMATCH {item['path']}")
+                  continue
+              h = hashlib.sha256()
+              with path.open("rb") as stream:
+                  for block in iter(lambda: stream.read(1024 * 1024), b""):
+                      h.update(block)
+              actual = h.hexdigest()
+              rows.append({"path": item["path"], "size": item["size"], "sha256": actual})
+              if actual != item["sha256"]:
+                  failures.append(f"SHA256_MISMATCH {item['path']}")
+          actual_files = {p.relative_to(root).as_posix() for p in (root / "firmware/extracted").rglob("*") if p.is_file()}
+          expected_files = {item["path"] for item in entries}
+          for extra in sorted(actual_files - expected_files):
+              failures.append(f"UNMANIFESTED {extra}")
+          report = {
+              "status": "failed" if failures else "passed",
+              "expected_file_count": len(entries),
+              "verified_file_count": len(rows),
+              "total_bytes": sum(x["size"] for x in rows),
+              "failure_count": len(failures),
+              "failures": failures,
+              "verified_files": rows,
+          }
+          Path("output/firmware-audit/integrity.json").write_text(json.dumps(report, indent=2) + "\n")
+          with Path("output/firmware-audit/INTEGRITY.md").open("w") as out:
+              out.write("# Public firmware integrity audit\n\n")
+              out.write(f"- Status: **{report['status']}**\n")
+              out.write(f"- Manifest files: {len(entries)}\n")
+              out.write(f"- Verified files: {len(rows)}\n")
+              out.write(f"- Verified bytes: {report['total_bytes']}\n")
+              out.write(f"- Failures: {len(failures)}\n")
+              if failures:
+                  out.write("\n## Failures\n")
+                  out.write("\n".join(f"- {x}" for x in failures) + "\n")
+          print(f"Verified {len(rows)}/{len(entries)} firmware files; failures={len(failures)}")
+          if failures:
+              sys.exit(1)
+          PY
 
-      - name: Check out primary repository at requested revision
-        uses: actions/checkout@v5
-        with:
-          repository: 14vvp93/mt8163_audio_engine
-          ref: ${{ inputs.source_ref }}
-          token: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
-          path: source
-          persist-credentials: false
-      - name: Extract every complete reference ZIP set
+      - name: Reassemble and verify HEQ APK
         run: |
-          mkdir -p output/repository-audit
-          python3 source/scripts/repository/prepare_reference_archives.py \
-            --root source \
-            --extract-root "$RUNNER_TEMP/mt8163-reference-expanded" \
-            --markdown output/repository-audit/ARCHIVE_INVENTORY.md \
-            --json output/repository-audit/archive-inventory.json
+          python3 worker/scripts/firmware/reassemble_heq_apk.py \
+            --parts-dir worker/firmware/extracted/heq \
+            --manifest worker/firmware/manifests/heq-apk.json \
+            --output output/firmware-audit/HEQ.apk
 
-      - name: Promote audio-relevant files into the repository
-        run: |
-          python3 source/scripts/repository/curate_audio_references.py \
-            --expanded "$RUNNER_TEMP/mt8163-reference-expanded" \
-            --destination source/reference-materials/extracted
-
-      - name: Verify reassembly of the committed HEQ APK chunks
-        run: |
-          python3 source/scripts/repository/reassemble_heq_apk.py --output "$RUNNER_TEMP/HEQ-verified.apk"
-
-      - name: Prepare archive audit output
-        run: mkdir -p output/repository-audit
-
-      - name: Upload extracted reference tree for inspection
+      - name: Upload firmware integrity report
         uses: actions/upload-artifact@v6
         with:
-          name: mt8163-reference-materials-expanded
-          path: |
-            ${{ runner.temp }}/mt8163-reference-expanded/
-            source/reference-materials/extracted/
-          if-no-files-found: error
-          compression-level: 1
-          retention-days: 30
-
-      - name: Upload archive inventory
-        uses: actions/upload-artifact@v6
-        with:
-          name: mt8163-reference-archive-inventory
-          path: |
-            output/repository-audit/ARCHIVE_INVENTORY.md
-            output/repository-audit/archive-inventory.json
+          name: public-firmware-integrity-audit
+          path: output/firmware-audit/
           if-no-files-found: error
           retention-days: 90
-
