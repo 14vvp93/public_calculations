@@ -11,6 +11,4 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Full firmware extraction trees are reproducible and not committed by default.
-/firmware/extracted/**
-!/firmware/extracted/README.md
+# Extracted firmware is the canonical public dataset and is committed with its manifest.
