@@ -27,7 +27,9 @@ def inventory(path: pathlib.Path):
             archive_digest.update(block)
     archive_hash = archive_digest.hexdigest()
     members = []
+    archive_format = "raw"
     if zipfile.is_zipfile(path):
+        archive_format = "zip"
         with zipfile.ZipFile(path) as zf:
             for info in zf.infolist():
                 if info.is_dir():
@@ -36,6 +38,7 @@ def inventory(path: pathlib.Path):
                     size, sha = digest_stream(src)
                 members.append({"name": info.filename, "size": size, "sha256": sha})
     elif tarfile.is_tarfile(path):
+        archive_format = "tar"
         with tarfile.open(path, "r:*") as tf:
             for info in tf.getmembers():
                 if not info.isfile():
@@ -46,12 +49,11 @@ def inventory(path: pathlib.Path):
                 with src:
                     size, sha = digest_stream(src)
                 members.append({"name": info.name, "size": size, "sha256": sha})
-    else:
-        raise ValueError(f"Unsupported archive format: {path}")
     members.sort(key=lambda x: (x["name"], x["size"], x["sha256"]))
     return {
         "schema_version": 1,
         "archive": path.name,
+        "format": archive_format,
         "archive_size": path.stat().st_size,
         "archive_sha256": archive_hash,
         "member_count": len(members),
