@@ -1,0 +1,69 @@
+name: Audit and extract reference archives
+
+on:
+  workflow_call:
+    inputs:
+      source_ref:
+        description: Immutable branch, tag, or commit in the primary repository
+        required: false
+        type: string
+        default: main
+    secrets:
+      SOURCE_REPO_READ_TOKEN:
+        required: true
+permissions:
+  contents: read
+
+jobs:
+  extract-and-inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out primary repository at requested revision
+        uses: actions/checkout@v5
+        with:
+          repository: 14vvp93/mt8163_audio_engine
+          ref: ${{ inputs.source_ref }}
+          token: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
+          path: source
+          persist-credentials: false
+      - name: Extract every complete reference ZIP set
+        run: |
+          python3 source/scripts/repository/prepare_reference_archives.py \
+            --root . \
+            --extract-root "$RUNNER_TEMP/mt8163-reference-expanded" \
+            --markdown output/repository-audit/ARCHIVE_INVENTORY.md \
+            --json output/repository-audit/archive-inventory.json
+
+      - name: Promote audio-relevant files into the repository
+        run: |
+          python3 source/scripts/repository/curate_audio_references.py \
+            --expanded "$RUNNER_TEMP/mt8163-reference-expanded" \
+            --destination source/reference-materials/extracted
+
+      - name: Verify reassembly of the committed HEQ APK chunks
+        run: |
+          python3 source/scripts/repository/reassemble_heq_apk.py --output "$RUNNER_TEMP/HEQ-verified.apk"
+
+      - name: Prepare archive audit output
+        run: mkdir -p output/repository-audit
+
+      - name: Upload extracted reference tree for inspection
+        uses: actions/upload-artifact@v6
+        with:
+          name: mt8163-reference-materials-expanded
+          path: ${{ runner.temp }}/mt8163-reference-expanded/
+          if-no-files-found: error
+          compression-level: 1
+          retention-days: 30
+
+      - name: Upload archive inventory
+        uses: actions/upload-artifact@v6
+        with:
+          name: mt8163-reference-archive-inventory
+          path: |
+            output/repository-audit/ARCHIVE_INVENTORY.md
+            output/repository-audit/archive-inventory.json
+          if-no-files-found: error
+          retention-days: 90
+
