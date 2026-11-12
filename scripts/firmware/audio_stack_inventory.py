@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Static MT8163 Android audio-stack and DSP-driver inventory."""
 from __future__ import annotations
-import argparse, hashlib, json, re, subprocess, xml.etree.ElementTree as ET
+import argparse, hashlib, json, re, shutil, subprocess, xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -64,6 +64,10 @@ def main():
         comparison={"standalone":{"size":standalone.stat().st_size,"sha256":digest(standalone),"elf":elf(standalone)},
                     "vendor_lib":{"size":archive.stat().st_size,"sha256":digest(archive),"elf":elf(archive)},
                     "same_bytes":digest(standalone)==digest(archive)}
+        variants=a.json.parent/"module-variants"; variants.mkdir(parents=True,exist_ok=True)
+        shutil.copy2(standalone,variants/"cd3313-standalone-dump.ko")
+        shutil.copy2(archive,variants/"cd3313-vendor-lib.ko")
+        comparison["artifact_copies"]=["module-variants/cd3313-standalone-dump.ko","module-variants/cd3313-vendor-lib.ko"]
     policies=[]
     for rel in ["files2/files2/vendor/audio_policy_configuration.xml",
                 "files2/files2/system/audio_policy_configuration.xml"]:
