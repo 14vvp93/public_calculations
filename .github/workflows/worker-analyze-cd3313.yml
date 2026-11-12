@@ -3,11 +3,6 @@ name: Analyze CD3313 kernel module
 on:
   workflow_call:
     inputs:
-      source_ref:
-        description: Immutable branch, tag, or commit in the primary repository
-        required: false
-        type: string
-        default: main
 permissions:
   contents: read
 
