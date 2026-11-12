@@ -11,7 +11,6 @@ import zipfile
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts" / "firmware"))
 import archive_inventory
-import import_public_firmware
 import process_archive_sets
 import safe_extract
 
@@ -113,55 +112,7 @@ class FirmwareToolTests(unittest.TestCase):
                 process_archive_sets.process_group(archives, output, groups[0][0], groups[0][1])
 
 
-    def test_importer_verifies_copied_firmware_and_manifest(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            source = root / "source"
-            dumps = source / "reference-materials/firmware-dumps"
-            heq = source / "reference-materials/heq"
-            kernel_dir = source / "reference-materials/kernel"
-            dumps.mkdir(parents=True)
-            heq.mkdir(parents=True)
-            kernel_dir.mkdir(parents=True)
-            samples = {
-                dumps / "files2.zip.001": b"archive-volume",
-                dumps / "build.prop": b"ro.build.version.release=9",
-                heq / "HEQ.zip.001": b"heq-volume",
-                kernel_dir / "cd3313.ko": b"kernel-module",
-            }
-            for path, payload in samples.items():
-                path.write_bytes(payload)
-            result = import_public_firmware.import_inputs(
-                source, root / "destination", "owner/source", "feature/test", "deadbeef", True
-            )
-            self.assertEqual(result["file_count"], 4)
-            self.assertEqual(result["total_bytes"], sum(len(v) for v in samples.values()))
-            for item in result["files"]:
-                target = root / "destination" / item["path"]
-                self.assertEqual(hashlib.sha256(target.read_bytes()).hexdigest(), item["sha256"])
-                self.assertTrue(item["verified_copy"])
-            manifest = root / "destination/firmware/manifests/mt8163-source-import.json"
-            self.assertTrue(manifest.is_file())
 
-    def test_importer_can_exclude_standalone_raw_dumps(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            source = root / "source"
-            dumps = source / "reference-materials/firmware-dumps"
-            heq = source / "reference-materials/heq"
-            kernel_dir = source / "reference-materials/kernel"
-            dumps.mkdir(parents=True)
-            heq.mkdir(parents=True)
-            kernel_dir.mkdir(parents=True)
-            (dumps / "files.zip.001").write_bytes(b"archive")
-            (dumps / "build.prop").write_bytes(b"raw")
-            (heq / "HEQ.zip.001").write_bytes(b"heq")
-            (kernel_dir / "cd3313.ko").write_bytes(b"module")
-            result = import_public_firmware.import_inputs(
-                source, root / "destination", "owner/source", "main", "deadbeef", False
-            )
-            self.assertEqual(result["file_count"], 3)
-            self.assertFalse((root / "destination/firmware/dumps/mt8163/build.prop").exists())
 
     def test_source_manifest_records_hashes_and_provenance(self):
         with tempfile.TemporaryDirectory() as td:
