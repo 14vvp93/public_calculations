@@ -5,3 +5,5 @@
 # Trigger revision: include both CD3313 module binaries for diffing
 
 # Trigger revision: capture boot.img and dtbo.img for DSP device-tree triage
+
+# Trigger revision: report enabled DSP nodes from DTBO FDT overlay
