@@ -52,6 +52,7 @@ Document retention and recreate large derived trees from immutable inputs and sc
 - [Workflow migration map](docs/WORKFLOW_MIGRATION_MAP.md)
 - [Firmware import from the private source repository](docs/FIRMWARE_IMPORT.md)
 - [Phase 1 status and exit criteria](docs/PHASE1_STATUS.md)
+- [MT8163 audio control architecture](docs/AUDIO_CONTROL_ARCHITECTURE.md)
 - [MT8163 audio stack — first-pass findings](reports/MT8163_AUDIO_STACK_FIRST_PASS.md)
 - [CD3313 module variant comparison](reports/CD3313_MODULE_VARIANT_DIFF.md)
 - [CD3313 ioctl and character-device ABI audit](reports/CD3313_IOCTL_ABI_AUDIT.md)
