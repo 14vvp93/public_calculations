@@ -259,11 +259,12 @@ class FirmwareToolTests(unittest.TestCase):
             (dumps / "dtbo.img").write_bytes(dtbo)
             output_json = root / "inventory.json"
             output_md = root / "inventory.md"
-            subprocess.run([
+            completed = subprocess.run([
                 sys.executable, str(ROOT / "scripts/firmware/audio_stack_inventory.py"),
                 "--extracted-root", str(extracted), "--dump-root", str(dumps),
                 "--json", str(output_json), "--markdown", str(output_md)
-            ], check=True, capture_output=True, text=True)
+            ], capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
             result = json.loads(output_json.read_text(encoding="utf-8"))
             node = result["device_tree_overlay"]["dsp_nodes"][0]
             self.assertEqual(node["compatible"], ["hcn,cd3313"])
