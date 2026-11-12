@@ -18,7 +18,7 @@ on:
           - all-light
           - audio-inventory
       archive_directory:
-        description: Archive directory under firmware/archives (used for extraction)
+        description: Archive directory under firmware/archives
         required: false
         default: firmware/archives/mt8163
         type: string
@@ -27,12 +27,29 @@ on:
         required: true
         default: "14"
         type: string
+  workflow_call:
+    inputs:
+      task:
+        description: Bounded analysis task
+        required: false
+        default: extract
+        type: string
+      archive_directory:
+        description: Archive directory under firmware/archives
+        required: false
+        default: firmware/archives/mt8163
+        type: string
+      retention_days:
+        description: Actions artifact retention (1-30 days)
+        required: false
+        default: "14"
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: public-compute-${{ github.ref }}-${{ inputs.task || 'extract' }}
+  group: public-compute-${{ github.repository }}-${{ inputs.task || 'extract' }}
   cancel-in-progress: true
 
 jobs:
@@ -40,9 +57,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: Checkout exact requested ref
+      - name: Checkout public compute worker and approved inputs
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          repository: 14vvp93/public_calculations
+          ref: main
+          path: worker
           persist-credentials: false
 
       - name: Set up Python
@@ -53,18 +73,18 @@ jobs:
       - name: Validate inputs
         env:
           TASK: ${{ inputs.task || 'extract' }}
-          ARCHIVE_DIRECTORY: ${{ inputs.archive_directory || 'firmware/archives/mt8163' }}
+          ARCHIVE_DIRECTORY: worker/${{ inputs.archive_directory || 'firmware/archives/mt8163' }}
           RETENTION: ${{ inputs.retention_days || '14' }}
         run: |
           set -euo pipefail
           case "$TASK" in inventory|extract|all-light|audio-inventory) ;; *) echo "Invalid task"; exit 2;; esac
           case "$RETENTION" in ''|*[!0-9]*) echo "Invalid retention"; exit 2;; esac
           if [ "$RETENTION" -lt 1 ] || [ "$RETENTION" -gt 30 ]; then echo "Retention must be 1..30"; exit 2; fi
-          if [ "$TASK" = "extract" ] || [ "$TASK" = "audio-inventory" ]; then
-            case "$ARCHIVE_DIRECTORY" in firmware/archives/*) ;; *) echo "Archive directory must be under firmware/archives"; exit 2;; esac
-            case "$ARCHIVE_DIRECTORY" in *..*|/*) echo "Unsafe archive directory"; exit 2;; esac
+          case "$ARCHIVE_DIRECTORY" in worker/firmware/archives/*) ;; *) echo "Archive directory must be under firmware/archives"; exit 2;; esac
+          case "$ARCHIVE_DIRECTORY" in *..*|/*) echo "Unsafe archive directory"; exit 2;; esac
+          if [ "$TASK" = "extract" ] || [ "$TASK" = "audio-inventory" ] || "$GITHUB_EVENT_NAME" = "push"; then
             resolved="$(realpath -e -- "$ARCHIVE_DIRECTORY")"
-            case "$resolved" in "$GITHUB_WORKSPACE"/firmware/archives/*) ;; *) echo "Archive directory symlink escapes firmware/archives"; exit 2;; esac
+            case "$resolved" in "$GITHUB_WORKSPACE"/worker/firmware/archives/*) ;; *) echo "Archive directory symlink escapes firmware/archives"; exit 2;; esac
             test -d "$resolved"
             if ! find "$resolved" -type f \( -iname '*.zip' -o -iname '*.zip.[0-9][0-9][0-9]' \) -print -quit | grep -q .; then
               echo "No ZIP archives or split ZIP volumes found."
@@ -77,22 +97,22 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p output
-          mapfile -d '' archives < <(find firmware/archives -type f \( -iname '*.zip' -o -iname '*.zip.[0-9][0-9][0-9]' -o -iname '*.tar' -o -iname '*.tar.gz' -o -iname '*.tgz' \) -print0 | sort -z)
+          mapfile -d '' archives < <(find worker/firmware/archives -type f \( -iname '*.zip' -o -iname '*.zip.[0-9][0-9][0-9]' -o -iname '*.tar' -o -iname '*.tar.gz' -o -iname '*.tgz' \) -print0 | sort -z)
           if [ "${#archives[@]}" -eq 0 ]; then
             echo "No archive files present; nothing to inventory."
             printf '{"schema_version":1,"archives":[],"status":"no-inputs"}\n' > output/archive-inventory.json
           else
-            python scripts/firmware/archive_inventory.py "${archives[@]}" --output output/archive-inventory.json
+            python worker/scripts/firmware/archive_inventory.py "${archives[@]}" --output output/archive-inventory.json
           fi
 
       - name: Reassemble split ZIP volumes and extract safely
         if: inputs.task == 'extract' || inputs.task == 'audio-inventory' || github.event_name == 'push'
         env:
-          ARCHIVE_DIRECTORY: ${{ inputs.archive_directory || 'firmware/archives/mt8163' }}
+          ARCHIVE_DIRECTORY: worker/${{ inputs.archive_directory || 'firmware/archives/mt8163' }}
         run: |
           set -euo pipefail
           mkdir -p output/extracted
-          python scripts/firmware/process_archive_sets.py \
+          python worker/scripts/firmware/process_archive_sets.py \
             --root "$ARCHIVE_DIRECTORY" \
             --extract-root output/extracted \
             --json output/archive-manifest.json \
@@ -102,9 +122,9 @@ jobs:
         if: inputs.task == 'audio-inventory' || github.event_name == 'push'
         run: |
           set -euo pipefail
-          python scripts/firmware/audio_stack_inventory.py \
+          python worker/scripts/firmware/audio_stack_inventory.py \
             --extracted-root output/extracted \
-            --dump-root firmware/dumps/mt8163 \
+            --dump-root worker/firmware/dumps/mt8163 \
             --json output/audio-stack-inventory.json \
             --markdown output/audio-stack-report.md
 
