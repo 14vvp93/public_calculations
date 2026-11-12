@@ -11,9 +11,10 @@ on:
           - inventory
           - extract
           - all-light
-      archive_path:
-        description: Optional path under firmware/archives (required for extract)
+      archive_directory:
+        description: Archive directory under firmware/archives (used for extraction)
         required: false
+        default: firmware/archives/mt8163
         type: string
       retention_days:
         description: Actions artifact retention (1-30 days)
@@ -31,7 +32,7 @@ concurrency:
 jobs:
   compute:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout exact requested ref
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -46,46 +47,50 @@ jobs:
       - name: Validate inputs
         env:
           TASK: ${{ inputs.task }}
-          ARCHIVE_PATH: ${{ inputs.archive_path }}
+          ARCHIVE_DIRECTORY: ${{ inputs.archive_directory }}
           RETENTION: ${{ inputs.retention_days }}
         run: |
           set -euo pipefail
           case "$TASK" in inventory|extract|all-light) ;; *) echo "Invalid task"; exit 2;; esac
           case "$RETENTION" in ''|*[!0-9]*) echo "Invalid retention"; exit 2;; esac
           if [ "$RETENTION" -lt 1 ] || [ "$RETENTION" -gt 30 ]; then echo "Retention must be 1..30"; exit 2; fi
-          if [ -n "$ARCHIVE_PATH" ]; then
-            case "$ARCHIVE_PATH" in firmware/archives/*) ;; *) echo "Archive must be under firmware/archives"; exit 2;; esac
-            case "$ARCHIVE_PATH" in *..*|/*) echo "Unsafe archive path"; exit 2;; esac
-            resolved="$(realpath -e -- "$ARCHIVE_PATH")"
-            case "$resolved" in "$GITHUB_WORKSPACE"/firmware/archives/*) ;; *) echo "Archive symlink escapes firmware/archives"; exit 2;; esac
-            test -f "$resolved"
-          fi
-          if [ "$TASK" = extract ] && [ -z "$ARCHIVE_PATH" ]; then
-            echo "extract requires archive_path"; exit 2
+          if [ "$TASK" = "extract" ]; then
+            case "$ARCHIVE_DIRECTORY" in firmware/archives/*) ;; *) echo "Archive directory must be under firmware/archives"; exit 2;; esac
+            case "$ARCHIVE_DIRECTORY" in *..*|/*) echo "Unsafe archive directory"; exit 2;; esac
+            resolved="$(realpath -e -- "$ARCHIVE_DIRECTORY")"
+            case "$resolved" in "$GITHUB_WORKSPACE"/firmware/archives/*) ;; *) echo "Archive directory symlink escapes firmware/archives"; exit 2;; esac
+            test -d "$resolved"
+            if ! find "$resolved" -type f \( -iname '*.zip' -o -iname '*.zip.[0-9][0-9][0-9]' \) -print -quit | grep -q .; then
+              echo "No ZIP archives or split ZIP volumes found."
+              exit 2
+            fi
           fi
 
-      - name: Inventory archives
+      - name: Inventory original archive files
         if: inputs.task == 'inventory' || inputs.task == 'all-light'
         run: |
           set -euo pipefail
           mkdir -p output
-          shopt -s nullglob
-          archives=(firmware/archives/*)
+          mapfile -d '' archives < <(find firmware/archives -type f \( -iname '*.zip' -o -iname '*.zip.[0-9][0-9][0-9]' -o -iname '*.tar' -o -iname '*.tar.gz' -o -iname '*.tgz' \) -print0 | sort -z)
           if [ "${#archives[@]}" -eq 0 ]; then
-            echo "No archives present; nothing to inventory."
+            echo "No archive files present; nothing to inventory."
             printf '{"schema_version":1,"archives":[],"status":"no-inputs"}\n' > output/archive-inventory.json
           else
             python scripts/firmware/archive_inventory.py "${archives[@]}" --output output/archive-inventory.json
           fi
 
-      - name: Safe extraction
+      - name: Reassemble split ZIP volumes and extract safely
         if: inputs.task == 'extract'
         env:
-          ARCHIVE_PATH: ${{ inputs.archive_path }}
+          ARCHIVE_DIRECTORY: ${{ inputs.archive_directory }}
         run: |
           set -euo pipefail
           mkdir -p output/extracted
-          python scripts/firmware/safe_extract.py "$ARCHIVE_PATH" output/extracted
+          python scripts/firmware/process_archive_sets.py \
+            --root "$ARCHIVE_DIRECTORY" \
+            --extract-root output/extracted \
+            --json output/archive-manifest.json \
+            --markdown output/archive-inventory.md
 
       - name: Upload results
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
