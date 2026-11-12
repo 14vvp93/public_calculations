@@ -52,8 +52,11 @@ Document retention and recreate large derived trees from immutable inputs and sc
 - [Workflow migration map](docs/WORKFLOW_MIGRATION_MAP.md)
 - [Firmware import from the private source repository](docs/FIRMWARE_IMPORT.md)
 - [Phase 1 status and exit criteria](docs/PHASE1_STATUS.md)
+- [MT8163 audio stack — first-pass findings](reports/MT8163_AUDIO_STACK_FIRST_PASS.md)
 
 ## Status
 
-Infrastructure bootstrap and CI validation are complete. The binary firmware import
-is prepared but awaits the read-only source token secret and a manual import run.
+Phase 1 is complete: all 48 approved firmware inputs were imported and hash-verified,
+and all four split archive sets were reassembled, CRC-checked and extracted. The first-pass
+audio-stack findings are documented in the report linked above. Analysis is host-side only;
+no live MT8163 device has been accessed.
