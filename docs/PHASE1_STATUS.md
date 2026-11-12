@@ -20,8 +20,8 @@ Last updated: 2026-11-12
 - Added manually dispatched compute workflow for inventory and split-aware extraction.
 - Pinned Actions dependencies to immutable full commit SHAs.
 - Added a controlled private-source-to-public-worker import workflow. It imports
-  only approved firmware paths, preserves original bytes, rejects files above
-  a conservative 95 MiB ceiling, computes SHA-256 manifests and commits only to
+  only approved firmware paths, preserves original bytes, verifies source-to-destination SHA-256 equality, rejects
+  symlinked paths and files above a conservative 95 MiB ceiling, and commits only to
   the public worker's `main`.
 - Added a workflow migration map and documented which analysis jobs belong in
   the compute worker versus which product build/test jobs remain product-owned.
