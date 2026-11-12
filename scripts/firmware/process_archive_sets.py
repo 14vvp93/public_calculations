@@ -145,7 +145,7 @@ def main() -> int:
                             "parts": [p.relative_to(root).as_posix() for p in parts],
                             "status": "error", "error": str(exc)})
     document = {"schema_version": 1, "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-                "source_root": root.as_posix(), "archive_count": len(reports), "archives": reports}
+                "source_root": args.root.as_posix(), "archive_count": len(reports), "archives": reports}
     args.json.write_text(json.dumps(document, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
                          encoding="utf-8")
     lines = ["# Firmware archive extraction inventory", "",
