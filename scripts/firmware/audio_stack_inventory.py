@@ -64,9 +64,11 @@ def parse_fdt(data):
             break
         else:
             raise ValueError("unknown FDT structure token {}".format(token))
-    result=[]
+    result=[]; fixups={}
     for node in nodes:
         props=node["props"]
+        if node["path"].endswith("__fixups__"):
+            for key,value in props.items(): fixups[key]=[x.decode("utf-8","replace") for x in value.split(b"\\0") if x]
         compat=[x.decode("utf-8","replace") for x in props.get("compatible",b"").split(b"\0") if x]
         status=props.get("status",b"").rstrip(b"\0").decode("utf-8","replace") or None
         reg=props.get("reg",b"")
@@ -74,7 +76,7 @@ def parse_fdt(data):
         gp=props.get("mute-gpios",b"")
         gpio_cells=[hex(x) for x in struct.unpack(">"+("I"*(len(gp)//4)),gp)] if gp and len(gp)%4==0 else []
         result.append({"path":node["path"],"compatible":compat,"status":status,"reg_cells":reg_cells,"mute_gpio_cells":gpio_cells})
-    return {"version":version,"nodes":result}
+    return {"version":version,"nodes":result,"fixups":fixups}
 
 def inspect_dtbo(path):
     data=path.read_bytes()
@@ -82,17 +84,17 @@ def inspect_dtbo(path):
     magic,total,header_size,entry_size,count,entries_offset,page_size,version=struct.unpack(">8I",data[:32])
     if magic!=0xd7b7ab1e or total>len(data) or entry_size<32:
         raise ValueError("invalid Android DTBO table")
-    entries=[]; dsp_nodes=[]
+    entries=[]; dsp_nodes=[]; fixups={}
     for i in range(count):
         off=entries_offset+i*entry_size
         size,dt_off,dt_id,dt_rev,*custom=struct.unpack(">8I",data[off:off+32])
         fdt=parse_fdt(data[dt_off:dt_off+size])
         selected=[n for n in fdt["nodes"] if any(x in ["hcn,cd3313","hcn,ak7604","hcn,fy7604"] for x in n["compatible"])]
         for n in selected: n["dtbo_entry"]=i
-        dsp_nodes.extend(selected)
+        dsp_nodes.extend(selected); fixups.update(fdt["fixups"])
         entries.append({"index":i,"size":size,"offset":dt_off,"id":dt_id,"revision":dt_rev,"custom":custom,"fdt_version":fdt["version"]})
     return {"total_size":total,"header_size":header_size,"entry_size":entry_size,"entry_count":count,
-            "page_size":page_size,"version":version,"entries":entries,"dsp_nodes":dsp_nodes}
+            "page_size":page_size,"version":version,"entries":entries,"dsp_nodes":dsp_nodes,"fixups":fixups}
 
 def main():
     p=argparse.ArgumentParser()
@@ -213,6 +215,7 @@ def main():
     lines += ["","## DTBO DSP device nodes",""]
     if device_tree_overlay:
         lines.append("DTBO entries: {}; total declared bytes: {}".format(device_tree_overlay["entry_count"],device_tree_overlay["total_size"]))
+        lines.append("DTBO symbol fixups: {}".format(device_tree_overlay["fixups"]))
         for n in device_tree_overlay["dsp_nodes"]: lines.append("- {} compatible={} status={} reg={} mute-gpios={}".format(n["path"],n["compatible"],n["status"],n["reg_cells"],n["mute_gpio_cells"]))
     lines += ["","## DSP module loading",""]
     for name,q in init.items():
