@@ -10,7 +10,7 @@ on:
         default: main
     secrets:
       SOURCE_REPO_READ_TOKEN:
-        required: true
+        required: false
 permissions:
   contents: read
 
@@ -18,6 +18,16 @@ jobs:
   scan:
     runs-on: ubuntu-24.04
     steps:
+      - name: Validate read-only access to primary repository
+        env:
+          SOURCE_TOKEN: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SOURCE_TOKEN" ]; then
+            echo "::error::Add SOURCE_REPO_READ_TOKEN to the caller repository's Actions secrets. It must be a fine-grained token with Contents: Read-only access to 14vvp93/mt8163_audio_engine."
+            exit 2
+          fi
+
       - name: Check out primary repository at requested revision
         uses: actions/checkout@v5
         with:
