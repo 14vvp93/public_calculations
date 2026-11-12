@@ -1,6 +1,10 @@
 name: Public firmware compute
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - firmware/EXTRACT_APPROVED
   workflow_dispatch:
     inputs:
       task:
@@ -26,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: public-compute-${{ github.ref }}-${{ inputs.task }}
+  group: public-compute-${{ github.ref }}-${{ inputs.task || 'extract' }}
   cancel-in-progress: true
 
 jobs:
@@ -46,9 +50,9 @@ jobs:
 
       - name: Validate inputs
         env:
-          TASK: ${{ inputs.task }}
-          ARCHIVE_DIRECTORY: ${{ inputs.archive_directory }}
-          RETENTION: ${{ inputs.retention_days }}
+          TASK: ${{ inputs.task || 'extract' }}
+          ARCHIVE_DIRECTORY: ${{ inputs.archive_directory || 'firmware/archives/mt8163' }}
+          RETENTION: ${{ inputs.retention_days || '14' }}
         run: |
           set -euo pipefail
           case "$TASK" in inventory|extract|all-light) ;; *) echo "Invalid task"; exit 2;; esac
@@ -67,7 +71,7 @@ jobs:
           fi
 
       - name: Inventory original archive files
-        if: inputs.task == 'inventory' || inputs.task == 'all-light'
+        if: inputs.task == 'inventory' || inputs.task == 'all-light' || github.event_name == 'push' || inputs.task == 'extract'
         run: |
           set -euo pipefail
           mkdir -p output
@@ -80,7 +84,7 @@ jobs:
           fi
 
       - name: Reassemble split ZIP volumes and extract safely
-        if: inputs.task == 'extract'
+        if: inputs.task == 'extract' || github.event_name == 'push'
         env:
           ARCHIVE_DIRECTORY: ${{ inputs.archive_directory }}
         run: |
@@ -95,7 +99,7 @@ jobs:
       - name: Upload results
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: public-compute-${{ inputs.task }}-${{ github.run_id }}
+          name: public-compute-${{ inputs.task || 'extract' }}-${{ github.run_id }}
           path: output/
           if-no-files-found: error
-          retention-days: ${{ inputs.retention_days }}
+          retention-days: ${{ inputs.retention_days || '14' }}
