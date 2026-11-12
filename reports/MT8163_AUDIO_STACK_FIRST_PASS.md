@@ -4,7 +4,8 @@ Date: 2026-11-12
 Source repository: `14march93/mt8163_audio_engine`  
 Source commit imported: `44e132c8ac299ebfd58831232ec6b6f64ae8f769`  
 Extraction workflow: [run 43205114889](https://github.com/14vvp93/public_calculations/actions/runs/43205114889)  
-Extraction artifact: `public-compute-extract-43205114889` (14-day retention; expires 2026-11-26)
+Audio inventory workflow: [run 43206552330](https://github.com/14vvp93/public_calculations/actions/runs/43206552330)  
+Latest analysis artifact: `public-compute-extract-43206552330` (14-day retention; expires 2026-11-26)
 
 ## 1. Extraction result
 
@@ -53,20 +54,20 @@ The imported `firmware/dumps/mt8163/init.mt8163.rc` loads, in sequence:
 
 Both `factory_init.rc` and `init.mt8163.rc` include the three DSP modules. All three DSP modules contain the `audiomux` misc-device name and registration code markers. They also expose overlapping mute/subwoofer GPIO naming.
 
-This is a high-priority probe/ownership question, not yet a proven collision: the actual I2C client matching and which physical DSP responds must be established from the device tree, module probe paths and runtime logs. Do not assume all three drivers are active on the same board simply because all three are inserted.
+This is a high-priority probe/ownership question, not yet a proven collision: the actual I2C client matching and which physical DSP responds must be established from the device tree, module probe paths and runtime logs. The registration-failure strings are evidence that the modules explicitly handle misc-device registration failure, not proof that all three probe successfully. Do not assume all three drivers are active on the same board simply because all three are inserted.
 
 ### F-02 — Two CD3313 module copies differ
 
 The standalone imported module at `firmware/dumps/mt8163/kernel/cd3313.ko` and the `vendor_lib.zip` member `lib/modules/cd3313.ko` have the same filename but different sizes and SHA-256 values:
 
-- standalone dump: 183,368 bytes; `b9ef172de1532867208fc620d4fe8d24612aa2ee4ad2d62ab2daaf6622387afb`
-- archive member: 188,520 bytes; `6a96207794c770d05a9ba6981a25af9868f38ebac0391c1c6461cd20ed394594`
+- standalone dump: 183,368 bytes; SHA-256 `b9ef172de1532867208fc620d4fe8d24612aa2ee4ad2d62ab2daaf6622387afb`; Build ID `dae15c9eb019e9388d15cb88088c202d017ebcf0`
+- archive member: 188,520 bytes; SHA-256 `6a96207794c770d05a9ba6981a25af9868f38ebac0391c1c6461cd20ed394594`; Build ID `e08637c02ef9a8c5077bb9ee12fd4b76dfb91d56`
 
 The archive member has Build ID `e08637c02ef9a8c5077bb9ee12fd4b76dfb91d56`. These must be treated as two distinct driver builds until the standalone dump is inspected and compared. Do not use the two copies interchangeably.
 
 ### F-03 — Bluetooth SCO microphone profile uses an output channel mask
 
-In `files2/files2/vendor/audio_policy_configuration.xml`, the device port `BT SCO Headset Mic` has role `source` (input) but declares `AUDIO_CHANNEL_OUT_STEREO` at 8/16 kHz. This is inconsistent with an input profile and should be checked against the active AudioPolicy parser and the matching system configuration.
+In `files2/files2/vendor/audio_policy_configuration.xml`, the device port `BT SCO Headset Mic` has role `source` (input) but declares `AUDIO_CHANNEL_OUT_STEREO` at 8/16 kHz. This is inconsistent with an input profile. The corresponding `BT SCO Headset Mic` entry in `files2/files2/system/audio_policy_configuration.xml` correctly uses `AUDIO_CHANNEL_IN_MONO`, confirming that the vendor XML entry is anomalous. Verify which configuration file the runtime actually loads.
 
 ### F-04 — Audio policy references an absent include
 
@@ -85,7 +86,7 @@ If both init paths are used in different boot/factory modes, the DSP channel gai
 
 ### F-07 — DSP chip selector property not found in the imported property files
 
-The JNI layer references `ro.hw.dsp.chip`, but this property is not present in the imported `build.prop` or `default.prop`. It may be set by another partition or init script not present in this dump; verify before designing automatic chip selection.
+The JNI layer references `ro.hw.dsp.chip`, but this property is not present in either imported `build.prop` or `default.prop`, and neither init script sets it. It may be set by another partition or a vendor property service not present in this dump; verify before designing automatic chip selection.
 
 ## 4. Duplicate inputs
 
@@ -105,4 +106,4 @@ These are duplicate copies, not separate implementations.
 
 ## Scope and confidence
 
-This is static analysis of the imported firmware snapshot and extracted binaries. No live device was accessed, no module was loaded, and no hardware registers or GPIOs were changed. Findings F-01, F-04, F-05 and F-07 require additional confirmation; F-02 is a verified hash difference; F-03 is a concrete input/output channel-mask inconsistency in the XML; F-06 is a verified init-file discrepancy.
+This is static analysis of the imported firmware snapshot and extracted binaries. The repeatable inventory script is `scripts/firmware/audio_stack_inventory.py`; CI and the analysis workflow both pass. No live device was accessed, no module was loaded, and no hardware registers or GPIOs were changed. Findings F-01, F-04, F-05 and F-07 require additional confirmation; F-02 is a verified hash difference; F-03 is a concrete input/output channel-mask inconsistency in the XML; F-06 is a verified init-file discrepancy.
