@@ -57,10 +57,10 @@ This is a high-priority probe/ownership question, not yet a proven collision: th
 
 ### F-02 — Two CD3313 module copies differ
 
-The standalone imported module at `firmware/dumps/mt8163/kernel/cd3313.ko` and the `vendor_lib.zip` member `lib/modules/cd3313.ko` have the same filename and size (183,368 bytes) but different SHA-256 values:
+The standalone imported module at `firmware/dumps/mt8163/kernel/cd3313.ko` and the `vendor_lib.zip` member `lib/modules/cd3313.ko` have the same filename but different sizes and SHA-256 values:
 
-- standalone dump: `b9ef172de1532867208fc620d4fe8d24612aa2ee4ad2d62ab2daaf6622387afb`
-- archive member: `6a96207794c770d05a9ba6981a25af9868f38ebac0391c1c6461cd20ed394594`
+- standalone dump: 183,368 bytes; `b9ef172de1532867208fc620d4fe8d24612aa2ee4ad2d62ab2daaf6622387afb`
+- archive member: 188,520 bytes; `6a96207794c770d05a9ba6981a25af9868f38ebac0391c1c6461cd20ed394594`
 
 The archive member has Build ID `e08637c02ef9a8c5077bb9ee12fd4b76dfb91d56`. These must be treated as two distinct driver builds until the standalone dump is inspected and compared. Do not use the two copies interchangeably.
 
