@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: Branch or tag in the private source repository
+        description: Branch or tag in 14vvp93/mt8163_audio_engine
         required: true
         default: feature/cd3313-driver-rewrite
         type: string
@@ -33,6 +33,8 @@ jobs:
     steps:
       - name: Checkout public compute repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Validate source ref and required credential
         env:
@@ -41,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$SOURCE_TOKEN" ]; then
-            echo "::error::Add SOURCE_REPO_READ_TOKEN as an Actions secret. It needs read-only Contents access to 14march93/mt8163_audio_engine."
+            echo "::error::Add SOURCE_REPO_READ_TOKEN to 14vvp93/public_calculations. It needs read-only Contents access to 14vvp93/mt8163_audio_engine."
             exit 2
           fi
           if [[ "$SOURCE_REF" == *".."* ]] || ! git check-ref-format "refs/heads/$SOURCE_REF" >/dev/null 2>&1; then
@@ -49,10 +51,10 @@ jobs:
             exit 2
           fi
 
-      - name: Checkout private source repository
+      - name: Checkout private primary repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: 14march93/mt8163_audio_engine
+          repository: 14vvp93/mt8163_audio_engine
           ref: ${{ inputs.source_ref || 'feature/cd3313-driver-rewrite' }}
           token: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
           path: source
@@ -60,14 +62,14 @@ jobs:
 
       - name: Import and verify approved firmware inputs
         env:
-          INCLUDE_RAW: ${{ inputs.include_raw_dumps || true }}
-          SOURCE_REF: ${{ inputs.source_ref }}
+          INCLUDE_RAW: ${{ github.event_name == 'push' || inputs.include_raw_dumps }}
+          SOURCE_REF: ${{ inputs.source_ref || 'feature/cd3313-driver-rewrite' }}
         run: |
           set -euo pipefail
           args=(
             --source-root source
             --destination-root .
-            --source-repository 14march93/mt8163_audio_engine
+            --source-repository 14vvp93/mt8163_audio_engine
             --source-ref "$SOURCE_REF"
             --source-commit "$(git -C source rev-parse HEAD)"
           )
@@ -88,7 +90,7 @@ jobs:
 
       - name: Commit imported public inputs
         env:
-          SOURCE_REF: ${{ inputs.source_ref }}
+          SOURCE_REF: ${{ inputs.source_ref || 'feature/cd3313-driver-rewrite' }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -98,5 +100,5 @@ jobs:
             echo "No source changes; public firmware inputs are already up to date."
             exit 0
           fi
-          git commit -m "data: import approved MT8163 firmware from $SOURCE_REF"
+          git commit -m "data: import approved MT8163 firmware from 14vvp93/$SOURCE_REF"
           git push origin HEAD:main
