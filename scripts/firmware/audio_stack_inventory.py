@@ -68,7 +68,7 @@ def parse_fdt(data):
     for node in nodes:
         props=node["props"]
         if node["path"].endswith("__fixups__"):
-            for key,value in props.items(): fixups[key]=[x.decode("utf-8","replace") for x in value.split(b"\\0") if x]
+            for key,value in props.items(): fixups[key]=[x.decode("utf-8","replace") for x in value.split(b"\0") if x]
         compat=[x.decode("utf-8","replace") for x in props.get("compatible",b"").split(b"\0") if x]
         status=props.get("status",b"").rstrip(b"\0").decode("utf-8","replace") or None
         reg=props.get("reg",b"")
