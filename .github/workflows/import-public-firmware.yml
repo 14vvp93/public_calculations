@@ -62,9 +62,10 @@ jobs:
 
       - name: Copy and verify extracted firmware tree
         env:
-          SOURCE_COMMIT: ${{ inputs.source_ref || 'feature/cd3313-driver-rewrite' }}
+          SOURCE_REF: ${{ inputs.source_ref || 'feature/cd3313-driver-rewrite' }}
         run: |
           set -euo pipefail
+          export SOURCE_COMMIT="$(git -C source rev-parse HEAD)"
           python3 - <<'PY'
           import hashlib, json, pathlib, shutil
           source = pathlib.Path("source/reference-materials/extracted")
@@ -97,7 +98,8 @@ jobs:
           out = {
               "schema_version": 1,
               "source_repository": "14vvp93/mt8163_audio_engine",
-              "source_ref": "${SOURCE_COMMIT}",
+              "source_ref": __import__("os").environ["SOURCE_REF"],
+              "source_commit": __import__("os").environ["SOURCE_COMMIT"],
               "source_manifest": "reference-materials/extracted/manifest.json",
               "file_count": len(copied),
               "total_bytes": sum(x["size"] for x in copied),
