@@ -6,7 +6,7 @@ import argparse, hashlib, json, pathlib, tarfile, zipfile
 CHUNK = 1024 * 1024
 
 def safe_target(root: pathlib.Path, member: str) -> pathlib.Path:
-    name = pathlib.PurePosixPath(member.replace("\\\\", "/"))
+    name = pathlib.PurePosixPath(member.replace("\\", "/"))
     if name.is_absolute() or any(part in ("..", "") for part in name.parts):
         raise ValueError(f"Unsafe archive path: {member!r}")
     target = (root / pathlib.Path(*name.parts)).resolve()
