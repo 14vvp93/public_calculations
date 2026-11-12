@@ -88,7 +88,7 @@ If both init paths are used in different boot/factory modes, the DSP channel gai
 
 The JNI layer references `ro.hw.dsp.chip`, but this property is not present in either imported `build.prop` or `default.prop`, and neither init script sets it. It may be set by another partition or a vendor property service not present in this dump; verify before designing automatic chip selection.
 
-### F-08 — Vendor CD3313 build fixes two I2C write-cache problems\n\nThe vendor archive module adds exact one-byte I2C transfer-result checks, up to five retries with 20 ms delays, and updates its register cache only after a successful transfer in both `cd3313_write_reg` and raw `cmd_write`. The older standalone reference sends once and updates cache without validating the exact transfer length. This earlier bug finding must not be attributed to the vendor module. See the [binary comparison](CD3313_MODULE_VARIANT_DIFF.md).\n\n## 4. Duplicate inputs
+### F-08 — Vendor CD3313 build fixes two I2C write-cache problems\n\nThe vendor archive module adds exact one-byte I2C transfer-result checks, up to five retries with 20 ms delays, and updates its register cache only after a successful transfer in both `cd3313_write_reg` and raw `cmd_write`. The older standalone reference sends once and updates cache without validating the exact transfer length. This earlier bug finding must not be attributed to the vendor module. See the [binary comparison](CD3313_MODULE_VARIANT_DIFF.md).\n\n### F-09 — CD3313 ioctl payload validation and asynchronous status problems\n\nThe vendor module's ioctl queues commands asynchronously and returns success without waiting for the I2C transaction. The callback has no visible minimum-length checks for commands `0x03`, `0x09`, `0x56` and `0xA3`; command `0x15` reads four words while checking only for more than one. The command buffer is allocated without zero-initialization, so short successful copies can leave stale slab bytes for the callback to consume. The read path formats cached software state and does not perform I2C readback. The raw diagnostic write path also has persistent-file-position and maximum-length NUL-termination risks. Full disassembly evidence and a command table are in [CD3313 ioctl and character-device ABI audit](CD3313_IOCTL_ABI_AUDIT.md).\n\n## 4. Duplicate inputs
 
 - `AudioParamOptions.xml` appears in two vendor paths with identical SHA-256.
 - `audio.primary.mt8163.so` appears in both `files2` and `vendor_lib` with identical SHA-256.
@@ -98,7 +98,7 @@ These are duplicate copies, not separate implementations.
 
 ## 5. Next analysis sequence
 
-1. Review the confirmed CD3313 variant differences and continue semantic analysis of ioctl payload validation, volume/EQ and event paths.
+1. Reconcile JNI payload construction with the confirmed CD3313 short-payload validation gaps and asynchronous return semantics.\n2. Continue semantic analysis of volume/EQ, event scheduling and physical readback paths.
 2. Determine which DSP chip is selected on this board from DT/DTBO, module probe logs and `ro.hw.dsp.chip` provisioning.
 3. Map all `/dev/audiomux` clients and their command payloads: AudioFlinger, AudioPolicy, ExtAudioMuxer JNI and each kernel driver.
 4. Map primary HAL PCM devices, ALSA mixer controls and XML routes to the actual MT8163 sound-card topology.
