@@ -2,7 +2,6 @@ name: Analyze all extracted firmware libraries and CD3313
 
 on:
   workflow_call:
-    inputs:
 permissions:
   contents: read
 
