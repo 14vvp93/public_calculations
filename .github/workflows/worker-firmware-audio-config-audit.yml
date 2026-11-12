@@ -2,7 +2,6 @@ name: Validate extracted firmware audio configuration
 
 on:
   workflow_call:
-    inputs:
 permissions:
   contents: read
 
@@ -27,14 +26,14 @@ jobs:
           ROOT=worker/firmware/extracted
           OUT=build/firmware-audio-audit
           mkdir -p "$OUT"
-          test -s "$ROOT/manifest.json"
+          test -s worker/firmware/manifests/mt8163-extracted.json
           python3 - <<'PY'
           from pathlib import Path
           import hashlib, json, xml.etree.ElementTree as ET
 
-          root = Path("worker/firmware/extracted")
+          root = Path("worker")
           out = Path("build/firmware-audio-audit")
-          manifest = json.loads((root / "manifest.json").read_text())
+          manifest = json.loads((root / "firmware/manifests/mt8163-extracted.json").read_text())
           rows = []
           failures = []
           for item in manifest["files"]:
