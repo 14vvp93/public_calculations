@@ -35,7 +35,7 @@ class FirmwareToolTests(unittest.TestCase):
             volume = pathlib.Path(td) / "files.zip.001"
             volume.write_bytes(b"split volume bytes")
             result = archive_inventory.inventory(volume)
-            self.assertEqual(result["format"], "raw")
+            self.assertEqual(result["format"], "split-zip-volume")
             self.assertEqual(result["archive_sha256"], hashlib.sha256(volume.read_bytes()).hexdigest())
 
     def test_safe_extract_writes_verified_member(self):
