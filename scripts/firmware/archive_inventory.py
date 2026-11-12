@@ -65,7 +65,11 @@ def main():
     p.add_argument("archives", nargs="+", type=pathlib.Path)
     p.add_argument("--output", type=pathlib.Path, default=pathlib.Path("archive-inventory.json"))
     a = p.parse_args()
-    records = [inventory(x) for x in sorted(a.archives)]
+    records = []
+    for archive_path in sorted(a.archives):
+        record = inventory(archive_path)
+        record["path"] = archive_path.as_posix()
+        records.append(record)
     doc = {"generated_at_utc": datetime.now(timezone.utc).isoformat(),
            "generator": "archive_inventory.py", "archives": records}
     a.output.parent.mkdir(parents=True, exist_ok=True)
