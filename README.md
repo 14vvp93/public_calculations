@@ -53,10 +53,12 @@ Document retention and recreate large derived trees from immutable inputs and sc
 - [Firmware import from the private source repository](docs/FIRMWARE_IMPORT.md)
 - [Phase 1 status and exit criteria](docs/PHASE1_STATUS.md)
 - [MT8163 audio stack — first-pass findings](reports/MT8163_AUDIO_STACK_FIRST_PASS.md)
+- [Audio stack inventory script](scripts/firmware/audio_stack_inventory.py)
+- [Latest static audio inventory run](https://github.com/14vvp93/public_calculations/actions/runs/43206552330)
 
 ## Status
 
 Phase 1 is complete: all 48 approved firmware inputs were imported and hash-verified,
 and all four split archive sets were reassembled, CRC-checked and extracted. The first-pass
-audio-stack findings are documented in the report linked above. Analysis is host-side only;
+audio-stack findings are documented in the report linked above. The first static audio inventory is complete ([run 43206552330](https://github.com/14vvp93/public_calculations/actions/runs/43206552330)). Analysis is host-side only;
 no live MT8163 device has been accessed.
