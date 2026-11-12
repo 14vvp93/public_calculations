@@ -8,9 +8,6 @@ on:
         required: false
         type: string
         default: main
-    secrets:
-      SOURCE_REPO_READ_TOKEN:
-        required: false
 permissions:
   contents: read
 
@@ -19,85 +16,43 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - name: Validate read-only access to primary repository
-        env:
-          SOURCE_TOKEN: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "$SOURCE_TOKEN" ]; then
-            echo "::error::Add SOURCE_REPO_READ_TOKEN to the caller repository's Actions secrets. It must be a fine-grained token with Contents: Read-only access to 14vvp93/mt8163_audio_engine."
-            exit 2
-          fi
-
-      - name: Check out primary repository at requested revision
-        uses: actions/checkout@v5
+      - name: Checkout public firmware dataset
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: 14vvp93/mt8163_audio_engine
-          ref: ${{ inputs.source_ref }}
-          token: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
-          path: source
+          repository: 14vvp93/public_calculations
+          ref: main
+          path: worker
           persist-credentials: false
-      - name: Reassemble split archives and extract safely
+
+
+
+      - name: Load and verify canonical extracted firmware dataset
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          from zipfile import ZipFile
-          import re
-
-          root = Path("source/reference-materials/firmware-dumps")
-          out = Path("firmware-analysis")
-          out.mkdir(exist_ok=True)
-          archives = []
-
-          for first in sorted(root.glob("*.zip.001")):
-              stem = first.name[:-4]  # remove .001
-              parts = sorted(root.glob(stem + ".*"))
-              expected = [root / f"{stem}.{i:03d}" for i in range(1, len(parts) + 1)]
-              if parts != expected:
-                  raise SystemExit(f"Missing or unexpected split part for {stem}: {parts}")
-              archives.append((stem[:-4], parts))
-
-          if not archives:
-              raise SystemExit("No supported ZIP archives found")
-
-          inventory = []
-          for name, parts in archives:
-              joined = out / f"{name}.zip"
-              with joined.open("wb") as dst:
-                  for part in parts:
-                      print(f"Appending {part} ({part.stat().st_size} bytes)")
-                      with part.open("rb") as src:
-                          while chunk := src.read(1024 * 1024):
-                              dst.write(chunk)
-
-              target = (out / name).resolve()
-              target.mkdir(parents=True, exist_ok=True)
-              with ZipFile(joined) as zf:
-                  bad = zf.testzip()
-                  if bad:
-                      raise SystemExit(f"Corrupt member in {joined}: {bad}")
-                  for item in zf.infolist():
-                      dest = (target / item.filename).resolve()
-                      if dest != target and target not in dest.parents:
-                          raise SystemExit(f"Unsafe archive path in {joined}: {item.filename}")
-                      if item.is_dir():
-                          dest.mkdir(parents=True, exist_ok=True)
-                      else:
-                          dest.parent.mkdir(parents=True, exist_ok=True)
-                          with zf.open(item) as src, dest.open("wb") as dst:
-                              while chunk := src.read(1024 * 1024):
-                                  dst.write(chunk)
-              count = sum(1 for p in target.rglob("*") if p.is_file())
-              inventory.append((name, len(parts), joined.stat().st_size, count))
-              print(f"EXTRACTED {name}: {count} files")
-
-          with (out / "ARCHIVE_INVENTORY.txt").open("w") as f:
-              for name, count, size, extracted in inventory:
-                  f.write(f"{name}: {count} source part(s), {size} bytes joined, {extracted} extracted files\\n")
+          import hashlib, json
+          root = Path("worker")
+          manifest = json.loads((root / "firmware/manifests/mt8163-extracted.json").read_text())
+          entries = manifest["files"]
+          if manifest["file_count"] != 1386 or len(entries) != 1386:
+              raise SystemExit("Unexpected extracted firmware file count")
+          for item in entries:
+              path = root / item["path"]
+              if not path.is_file() or path.stat().st_size != item["size"]:
+                  raise SystemExit(f"Missing or size mismatch: {path}")
+              h = hashlib.sha256()
+              with path.open("rb") as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                      h.update(chunk)
+              if h.hexdigest() != item["sha256"]:
+                  raise SystemExit(f"SHA-256 mismatch: {path}")
+          print(f"Verified {len(entries)} extracted firmware files ({manifest['total_bytes']} bytes)")
           PY
-
+          mkdir -p firmware-analysis/firmware-dumps
+          cp -a worker/firmware/extracted/. firmware-analysis/
+          cp -a worker/firmware/dumps/mt8163/. firmware-analysis/firmware-dumps/
       - name: Build pinned VDEX extractor
         shell: bash
         run: |
