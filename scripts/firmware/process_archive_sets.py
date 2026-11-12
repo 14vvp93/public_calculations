@@ -110,6 +110,7 @@ def process_group(root: Path, extract_root: Path, label: str, parts: list[Path])
                              "extracted_path": target.relative_to(extract_root).as_posix()})
         return {
             "archive": label,
+            "status": "ok",
             "parts": [p.relative_to(root).as_posix() for p in parts],
             "status": "ok",
             "file_count": len(rows),
