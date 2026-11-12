@@ -15,7 +15,7 @@ Last updated: 2026-11-12
 - Verified all 48 imported files against the source-to-destination manifest: no missing files or size mismatches.
 - Reassembled, CRC-checked and extracted all four archive sets successfully: 1,416 files and 587,184,709 expanded bytes.
 - Audited the retained source workflows for portability and recorded the migration map.
-- Added the first-pass audio-stack report and a repeatable ELF/module/XML inventory script. The script compares both CD3313 builds, scans `/dev/audiomux` references and checks AudioPolicy/init configuration.
+- Added the first-pass audio-stack report and a repeatable ELF/module/XML inventory script. The script compares both CD3313 builds, scans `/dev/audiomux` references, parses DTBO DSP nodes and checks AudioPolicy/init configuration. Follow-up disassembly reports document the shared misc-device registration conflict, I2C retry improvements, kernel payload validation gaps and the JNI one-word over-read.
 
 ## Verification runs
 
@@ -49,7 +49,7 @@ See [MT8163 audio stack — first-pass findings](../reports/MT8163_AUDIO_STACK_F
 Highest-priority follow-ups:
 1. Compare the two distinct `cd3313.ko` builds found in the standalone dump and `vendor_lib.zip`.
 2. Establish actual DSP selection and I2C probe behavior; three DSP driver modules are loaded by the supplied init configuration.
-3. Trace all `/dev/audiomux` clients across AudioFlinger, AudioPolicy, ExtAudioMuxer JNI and kernel drivers.
+3. Resolve the shared `audiomux` misc-device registration conflict against actual I2C probe logs.\n4. Reconcile the ExtAudioMuxer JNI one-word over-read with kernel payload validation and command-specific ABI lengths.\n5. Trace all `/dev/audiomux` clients across AudioFlinger, AudioPolicy, ExtAudioMuxer JNI and kernel drivers.
 4. Validate the Bluetooth SCO input channel mask and missing AudioPolicy include against the active runtime configuration.
 5. Map primary HAL PCM/mixer controls to the actual sound-card topology.
 
