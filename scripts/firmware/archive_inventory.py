@@ -18,7 +18,14 @@ def digest_stream(stream):
     return size, h.hexdigest()
 
 def inventory(path: pathlib.Path):
-    archive_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+    archive_digest = hashlib.sha256()
+    with path.open("rb") as archive_stream:
+        while True:
+            block = archive_stream.read(CHUNK)
+            if not block:
+                break
+            archive_digest.update(block)
+    archive_hash = archive_digest.hexdigest()
     members = []
     if zipfile.is_zipfile(path):
         with zipfile.ZipFile(path) as zf:
