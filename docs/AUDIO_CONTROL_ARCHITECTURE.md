@@ -64,7 +64,7 @@ The XML's `builtin_Mic_Mic3/turnoff` repeats `Audio_ADC_3_Switch=Off`. Other mic
 
 ## 2. DSP device selection and ownership
 
-The DTBO contains one overlay entry. Its `__fixups__` maps symbol `i2c2` to `fragment@11:target`. That fragment declares:
+The base DTB embedded in `boot.img` has I2C controllers at `0x11007000`, `0x11008000` and `0x11009000` marked disabled. The single DTBO entry activates the buses; its `__fixups__` maps symbol `i2c2` to `fragment@11:target`, and that fragment overlays the third controller (`0x11009000`) with the following devices:
 
 | Device-tree node | Compatible | I2C address | Status |
 |---|---|---:|---|
