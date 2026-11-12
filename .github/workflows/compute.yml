@@ -1,46 +1,31 @@
 name: Public firmware compute
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - firmware/EXTRACT_APPROVED
-      - firmware/AUDIO_ANALYSIS_APPROVED
   workflow_dispatch:
     inputs:
       task:
-        description: Bounded analysis task
+        description: Bounded task against the canonical extracted firmware dataset
         required: true
         type: choice
         options:
           - inventory
-          - extract
+          - verify
           - all-light
           - audio-inventory
-      archive_directory:
-        description: Archive directory under firmware/archives
-        required: false
-        default: firmware/archives/mt8163
-        type: string
       retention_days:
-        description: Actions artifact retention (1-30 days)
+        description: Result artifact retention (1-90 days)
         required: true
         default: "14"
         type: string
   workflow_call:
     inputs:
       task:
-        description: Bounded analysis task
+        description: Bounded task against the canonical extracted firmware dataset
         required: false
-        default: extract
-        type: string
-      archive_directory:
-        description: Archive directory under firmware/archives
-        required: false
-        default: firmware/archives/mt8163
+        default: verify
         type: string
       retention_days:
-        description: Actions artifact retention (1-30 days)
+        description: Result artifact retention (1-90 days)
         required: false
         default: "14"
         type: string
@@ -49,7 +34,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: public-compute-${{ github.repository }}-${{ inputs.task || 'extract' }}
+  group: public-compute-${{ github.repository }}-${{ inputs.task || 'verify' }}
   cancel-in-progress: true
 
 jobs:
@@ -57,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: Checkout public compute worker and approved inputs
+      - name: Checkout public firmware dataset and compute tools
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: 14vvp93/public_calculations
@@ -70,60 +55,76 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validate inputs
+      - name: Validate task and retention
         env:
-          TASK: ${{ inputs.task || 'extract' }}
-          ARCHIVE_DIRECTORY: worker/${{ inputs.archive_directory || 'firmware/archives/mt8163' }}
+          TASK: ${{ inputs.task || 'verify' }}
           RETENTION: ${{ inputs.retention_days || '14' }}
         run: |
           set -euo pipefail
-          case "$TASK" in inventory|extract|all-light|audio-inventory) ;; *) echo "Invalid task"; exit 2;; esac
+          case "$TASK" in inventory|verify|all-light|audio-inventory) ;; *) echo "Invalid task"; exit 2;; esac
           case "$RETENTION" in ''|*[!0-9]*) echo "Invalid retention"; exit 2;; esac
-          if [ "$RETENTION" -lt 1 ] || [ "$RETENTION" -gt 30 ]; then echo "Retention must be 1..30"; exit 2; fi
-          case "$ARCHIVE_DIRECTORY" in worker/firmware/archives/*) ;; *) echo "Archive directory must be under firmware/archives"; exit 2;; esac
-          case "$ARCHIVE_DIRECTORY" in *..*|/*) echo "Unsafe archive directory"; exit 2;; esac
-          if [ "$TASK" = "extract" ] || [ "$TASK" = "audio-inventory" ] || [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            resolved="$(realpath -e -- "$ARCHIVE_DIRECTORY")"
-            case "$resolved" in "$GITHUB_WORKSPACE"/worker/firmware/archives/*) ;; *) echo "Archive directory symlink escapes firmware/archives"; exit 2;; esac
-            test -d "$resolved"
-            if ! find "$resolved" -type f \( -iname '*.zip' -o -iname '*.zip.[0-9][0-9][0-9]' \) -print -quit | grep -q .; then
-              echo "No ZIP archives or split ZIP volumes found."
-              exit 2
-            fi
-          fi
+          if [ "$RETENTION" -lt 1 ] || [ "$RETENTION" -gt 90 ]; then echo "Retention must be 1..90"; exit 2; fi
+          test -s worker/firmware/manifests/mt8163-extracted.json
+          test -d worker/firmware/extracted/system
+          test -d worker/firmware/extracted/vendor
 
-      - name: Inventory original archive files
-        if: inputs.task == 'inventory' || inputs.task == 'all-light' || github.event_name == 'push' || inputs.task == 'extract' || inputs.task == 'audio-inventory'
+      - name: Inventory canonical firmware files
+        if: inputs.task == 'inventory' || inputs.task == 'all-light' || inputs.task == 'verify' || inputs.task == 'audio-inventory'
         run: |
           set -euo pipefail
           mkdir -p output
-          mapfile -d '' archives < <(find worker/firmware/archives -type f \( -iname '*.zip' -o -iname '*.zip.[0-9][0-9][0-9]' -o -iname '*.tar' -o -iname '*.tar.gz' -o -iname '*.tgz' \) -print0 | sort -z)
-          if [ "${#archives[@]}" -eq 0 ]; then
-            echo "No archive files present; nothing to inventory."
-            printf '{"schema_version":1,"archives":[],"status":"no-inputs"}\n' > output/archive-inventory.json
-          else
-            python worker/scripts/firmware/archive_inventory.py "${archives[@]}" --output output/archive-inventory.json
-          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+          roots = [Path("worker/firmware/extracted"), Path("worker/firmware/dumps/mt8163")]
+          rows = []
+          for root in roots:
+              if not root.exists():
+                  continue
+              for path in sorted(p for p in root.rglob("*") if p.is_file()):
+                  h = hashlib.sha256()
+                  with path.open("rb") as stream:
+                      for block in iter(lambda: stream.read(1024 * 1024), b""):
+                          h.update(block)
+                  rows.append({"path": path.as_posix(), "size": path.stat().st_size, "sha256": h.hexdigest()})
+          result = {"file_count": len(rows), "total_bytes": sum(x["size"] for x in rows), "files": rows}
+          Path("output/firmware-inventory.json").write_text(json.dumps(result, indent=2) + "\n")
+          print(f"Inventoried {len(rows)} public firmware files ({result['total_bytes']} bytes)")
+          PY
 
-      - name: Reassemble split ZIP volumes and extract safely
-        if: inputs.task == 'extract' || inputs.task == 'audio-inventory' || github.event_name == 'push'
-        env:
-          ARCHIVE_DIRECTORY: worker/${{ inputs.archive_directory || 'firmware/archives/mt8163' }}
+      - name: Verify extracted firmware against SHA-256 manifest
+        if: inputs.task == 'verify' || inputs.task == 'audio-inventory'
         run: |
           set -euo pipefail
-          mkdir -p output/extracted
-          python worker/scripts/firmware/process_archive_sets.py \
-            --root "$ARCHIVE_DIRECTORY" \
-            --extract-root output/extracted \
-            --json output/archive-manifest.json \
-            --markdown output/archive-inventory.md
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+          root = Path("worker")
+          manifest = json.loads((root / "firmware/manifests/mt8163-extracted.json").read_text())
+          entries = manifest["files"]
+          failures = []
+          for item in entries:
+              path = root / item["path"]
+              if not path.is_file() or path.stat().st_size != item["size"]:
+                  failures.append(item["path"])
+                  continue
+              h = hashlib.sha256()
+              with path.open("rb") as stream:
+                  for block in iter(lambda: stream.read(1024 * 1024), b""):
+                      h.update(block)
+              if h.hexdigest() != item["sha256"]:
+                  failures.append(item["path"])
+          if len(entries) != manifest["file_count"] or failures:
+              raise SystemExit(f"Firmware integrity failed: {len(failures)} mismatches")
+          print(f"SHA-256 verified {len(entries)} extracted firmware files")
+          PY
 
       - name: Analyze Android audio stack and DSP modules
-        if: inputs.task == 'audio-inventory' || github.event_name == 'push'
+        if: inputs.task == 'audio-inventory'
         run: |
           set -euo pipefail
           python worker/scripts/firmware/audio_stack_inventory.py \
-            --extracted-root output/extracted \
+            --extracted-root worker/firmware/extracted \
             --dump-root worker/firmware/dumps/mt8163 \
             --json output/audio-stack-inventory.json \
             --markdown output/audio-stack-report.md
@@ -131,7 +132,7 @@ jobs:
       - name: Upload results
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: public-compute-${{ inputs.task || 'extract' }}-${{ github.run_id }}
+          name: public-compute-${{ inputs.task || 'verify' }}-${{ github.run_id }}
           path: output/
           if-no-files-found: error
           retention-days: ${{ inputs.retention_days || '14' }}
