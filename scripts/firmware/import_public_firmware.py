@@ -72,7 +72,10 @@ def import_inputs(source_root: pathlib.Path, destination_root: pathlib.Path,
         size, source_sha = hash_file(source)
         if size > MAX_GIT_BLOB:
             raise ValueError(f"Input exceeds conservative 95 MiB Git blob limit: {source}")
-        target = (destination_root / relative_target).resolve()
+        lexical_target = destination_root / relative_target
+        if lexical_target.is_symlink():
+            raise ValueError(f"Destination symlink rejected: {lexical_target}")
+        target = lexical_target.resolve()
         if destination_root not in target.parents:
             raise ValueError(f"Destination escapes repository: {relative_target}")
         if target.is_symlink():
@@ -84,6 +87,8 @@ def import_inputs(source_root: pathlib.Path, destination_root: pathlib.Path,
                 pass
             else:
                 temporary = target.with_name(target.name + ".import-tmp")
+                if temporary.is_symlink():
+                    raise ValueError(f"Temporary destination symlink rejected: {temporary}")
                 shutil.copyfile(source, temporary)
                 copied_size, copied_sha = hash_file(temporary)
                 if copied_size != size or copied_sha != source_sha:
@@ -92,6 +97,8 @@ def import_inputs(source_root: pathlib.Path, destination_root: pathlib.Path,
                 temporary.replace(target)
         else:
             temporary = target.with_name(target.name + ".import-tmp")
+            if temporary.is_symlink():
+                raise ValueError(f"Temporary destination symlink rejected: {temporary}")
             shutil.copyfile(source, temporary)
             copied_size, copied_sha = hash_file(temporary)
             if copied_size != size or copied_sha != source_sha:
