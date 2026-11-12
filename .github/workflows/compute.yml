@@ -82,7 +82,7 @@ jobs:
           if [ "$RETENTION" -lt 1 ] || [ "$RETENTION" -gt 30 ]; then echo "Retention must be 1..30"; exit 2; fi
           case "$ARCHIVE_DIRECTORY" in worker/firmware/archives/*) ;; *) echo "Archive directory must be under firmware/archives"; exit 2;; esac
           case "$ARCHIVE_DIRECTORY" in *..*|/*) echo "Unsafe archive directory"; exit 2;; esac
-          if [ "$TASK" = "extract" ] || [ "$TASK" = "audio-inventory" ] || "$GITHUB_EVENT_NAME" = "push"; then
+          if [ "$TASK" = "extract" ] || [ "$TASK" = "audio-inventory" ] || [ "$GITHUB_EVENT_NAME" = "push" ]; then
             resolved="$(realpath -e -- "$ARCHIVE_DIRECTORY")"
             case "$resolved" in "$GITHUB_WORKSPACE"/worker/firmware/archives/*) ;; *) echo "Archive directory symlink escapes firmware/archives"; exit 2;; esac
             test -d "$resolved"
