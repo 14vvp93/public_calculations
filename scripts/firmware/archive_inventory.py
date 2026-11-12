@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Create a deterministic SHA-256 inventory for ZIP/TAR firmware archives."""
 from __future__ import annotations
-import argparse, hashlib, json, pathlib, tarfile, zipfile
+import argparse, hashlib, json, pathlib, re, tarfile, zipfile
 from datetime import datetime, timezone
 
 CHUNK = 1024 * 1024
@@ -28,7 +28,12 @@ def inventory(path: pathlib.Path):
     archive_hash = archive_digest.hexdigest()
     members = []
     archive_format = "raw"
-    if zipfile.is_zipfile(path):
+    if re.search(r"\.zip\.\d{3}$", path.name, re.IGNORECASE):
+        # A trailing split volume may contain the ZIP central directory and fool
+        # zipfile.is_zipfile(), but it is not a standalone archive. Reassembly is
+        # handled by process_archive_sets.py.
+        archive_format = "split-zip-volume"
+    elif zipfile.is_zipfile(path):
         archive_format = "zip"
         with zipfile.ZipFile(path) as zf:
             for info in zf.infolist():
