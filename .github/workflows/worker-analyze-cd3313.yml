@@ -8,9 +8,6 @@ on:
         required: false
         type: string
         default: main
-    secrets:
-      SOURCE_REPO_READ_TOKEN:
-        required: false
 permissions:
   contents: read
 
@@ -18,24 +15,16 @@ jobs:
   analyze:
     runs-on: ubuntu-24.04
     steps:
-      - name: Validate read-only access to primary repository
-        env:
-          SOURCE_TOKEN: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "$SOURCE_TOKEN" ]; then
-            echo "::error::Add SOURCE_REPO_READ_TOKEN to the caller repository's Actions secrets. It must be a fine-grained token with Contents: Read-only access to 14vvp93/mt8163_audio_engine."
-            exit 2
-          fi
-
-      - name: Check out primary repository at requested revision
-        uses: actions/checkout@v5
+      - name: Checkout public firmware dataset
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: 14vvp93/mt8163_audio_engine
-          ref: ${{ inputs.source_ref }}
-          token: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
-          path: source
+          repository: 14vvp93/public_calculations
+          ref: main
+          path: worker
           persist-credentials: false
+
+
+
       - name: Install analysis tools
         run: |
           sudo apt-get update
@@ -43,9 +32,9 @@ jobs:
 
       - name: Validate module
         run: |
-          test -s source/reference-materials/kernel/cd3313.ko
-          file source/reference-materials/kernel/cd3313.ko | tee module-file.txt
-          sha256sum source/reference-materials/kernel/cd3313.ko | tee module-sha256.txt
+          test -s worker/firmware/dumps/mt8163/kernel/cd3313.ko
+          file worker/firmware/dumps/mt8163/kernel/cd3313.ko | tee module-file.txt
+          sha256sum worker/firmware/dumps/mt8163/kernel/cd3313.ko | tee module-sha256.txt
 
       - name: Generate static analysis reports
         run: |
@@ -59,23 +48,23 @@ jobs:
             code=$?
             printf '%s\texit=%s\n' "$name" "$code" >> cd3313-analysis/command-status.txt
           }
-          run_report elf-header.txt readelf -h source/reference-materials/kernel/cd3313.ko
-          run_report sections.txt readelf -S source/reference-materials/kernel/cd3313.ko
-          run_report symbols-readelf.txt readelf -sW source/reference-materials/kernel/cd3313.ko
-          run_report relocations.txt readelf -rW source/reference-materials/kernel/cd3313.ko
-          run_report dwarf-info.txt readelf --debug-dump=info source/reference-materials/kernel/cd3313.ko
-          run_report dwarf-lines.txt readelf --debug-dump=decodedline source/reference-materials/kernel/cd3313.ko
-          run_report disassembly-lines.txt objdump -m arm -dlwC source/reference-materials/kernel/cd3313.ko
-          run_report address-to-source.txt addr2line -e source/reference-materials/kernel/cd3313.ko -f -i 0x11ec 0x1200 0x1288 0x139c 0x14ac 0x14f0 0x1538 0x15fc 0x163c 0x1694 0x1788 0x1818 0x1858 0x188c
-          run_report symbols-nm.txt nm -an source/reference-materials/kernel/cd3313.ko
-          run_report strings.txt strings -a -n 4 -t x source/reference-materials/kernel/cd3313.ko
-          run_report disassembly-relocations.txt objdump -m arm -drwC source/reference-materials/kernel/cd3313.ko
-          run_report section-bytes.txt arm-linux-gnueabi-objdump -s source/reference-materials/kernel/cd3313.ko
+          run_report elf-header.txt readelf -h worker/firmware/dumps/mt8163/kernel/cd3313.ko
+          run_report sections.txt readelf -S worker/firmware/dumps/mt8163/kernel/cd3313.ko
+          run_report symbols-readelf.txt readelf -sW worker/firmware/dumps/mt8163/kernel/cd3313.ko
+          run_report relocations.txt readelf -rW worker/firmware/dumps/mt8163/kernel/cd3313.ko
+          run_report dwarf-info.txt readelf --debug-dump=info worker/firmware/dumps/mt8163/kernel/cd3313.ko
+          run_report dwarf-lines.txt readelf --debug-dump=decodedline worker/firmware/dumps/mt8163/kernel/cd3313.ko
+          run_report disassembly-lines.txt objdump -m arm -dlwC worker/firmware/dumps/mt8163/kernel/cd3313.ko
+          run_report address-to-source.txt addr2line -e worker/firmware/dumps/mt8163/kernel/cd3313.ko -f -i 0x11ec 0x1200 0x1288 0x139c 0x14ac 0x14f0 0x1538 0x15fc 0x163c 0x1694 0x1788 0x1818 0x1858 0x188c
+          run_report symbols-nm.txt nm -an worker/firmware/dumps/mt8163/kernel/cd3313.ko
+          run_report strings.txt strings -a -n 4 -t x worker/firmware/dumps/mt8163/kernel/cd3313.ko
+          run_report disassembly-relocations.txt objdump -m arm -drwC worker/firmware/dumps/mt8163/kernel/cd3313.ko
+          run_report section-bytes.txt arm-linux-gnueabi-objdump -s worker/firmware/dumps/mt8163/kernel/cd3313.ko
           true
           {
             echo "# CD3313 module analysis"
             echo
-            echo "Generated from repository file source/reference-materials/kernel/cd3313.ko."
+            echo "Generated from repository file worker/firmware/dumps/mt8163/kernel/cd3313.ko."
             echo
             echo '## Module identity'
             cat module-file.txt
