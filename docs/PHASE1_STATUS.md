@@ -1,84 +1,67 @@
-# Phase 1 — infrastructure status
+# Phase 1 — infrastructure and firmware baseline
 
 Last updated: 2026-11-12
 
+<badge>Complete</badge>
+
 ## Completed
 
-- Initialized the public compute repository on `main`.
-- Defined its boundary: public firmware inputs, derived data, analysis tools,
-  heavy Actions and public reports live here; canonical product source remains
-  in the private `14vvp93/mt8163_audio_engine`.
-- Added the repository layout for firmware archives/dumps/extraction/manifests,
-  ELF, Audio HAL, CD3313, PCM/DSP, configuration analysis, scripts and reports.
-- Documented public firmware approval and secret/privacy exclusions.
-- Added streaming SHA-256 archive inventory, safe extraction, split-ZIP volume
-  reassembly, CRC checks, duplicate destination checks, symlink rejection and
-  source provenance manifests.
-- Added automated tests for archive hashing, raw split volumes, safe extraction,
-  path traversal, duplicate paths, split-volume reassembly, missing volumes and
-  source provenance.
-- Added manually dispatched compute workflow for inventory and split-aware extraction.
-- Pinned Actions dependencies to immutable full commit SHAs.
-- Added a controlled private-source-to-public-worker import workflow. It imports
-  only approved firmware paths, preserves original bytes, verifies source-to-destination SHA-256 equality, rejects
-  symlinked paths and files above a conservative 95 MiB ceiling, and commits only to
-  the public worker's `main`.
-- Added a workflow migration map and documented which analysis jobs belong in
-  the compute worker versus which product build/test jobs remain product-owned.
-- Audited the 16 retained source workflows for branch/repository portability and
-  recorded the findings in the source repository's workflow audit.
-- Corrected the old migration document so it agrees with the approved public
-  firmware-storage policy.
+- Initialized and documented the public compute repository. The canonical product implementation remains in the private `14vvp93/mt8163_audio_engine`.
+- Added the firmware archive/dump/extraction/manifests layout and analysis areas for ELF, Audio HAL, CD3313, PCM/DSP and configuration.
+- Added streaming SHA-256 inventory, safe extraction, split-ZIP reassembly, CRC verification, duplicate destination checks, symlink rejection and source provenance manifests.
+- Added automated tests for hashing, extraction safety, path traversal, duplicate paths, split-volume reassembly, missing volumes and importer provenance.
+- Added a controlled private-source-to-public-worker importer. It preserves source bytes, verifies source/destination SHA-256, rejects symlinked inputs and enforces a conservative 95 MiB Git blob ceiling.
+- Imported all 48 approved firmware inputs from source commit `44e132c8ac299ebfd58831232ec6b6f64ae8f769`: 26 split archive volumes, 21 standalone firmware files and one standalone kernel-module reference.
+- Verified all 48 imported files against the source-to-destination manifest: no missing files or size mismatches.
+- Reassembled, CRC-checked and extracted all four archive sets successfully: 1,416 files and 587,184,709 expanded bytes.
+- Audited the retained source workflows for portability and recorded the migration map.
+- Added the first-pass audio-stack report with confirmed architecture evidence and prioritized investigation items.
 
-## CI verification
+## Verification runs
 
-The infrastructure validation workflow completed successfully, including Python
-compilation, firmware tool unit tests and CLI checks:
+- [Infrastructure validation — run 43205101804](https://github.com/14vvp93/public_calculations/actions/runs/43205101804) — success.
+- [Firmware import — run 43204393764](https://github.com/14vvp93/public_calculations/actions/runs/43204393764) — success.
+- [Archive inventory and extraction — run 43205114889](https://github.com/14vvp93/public_calculations/actions/runs/43205114889) — success.
 
-- [Latest full validation — run 43202820456](https://github.com/14vvp93/public_calculations/actions/runs/43202820456)
-- [Verified importer and expanded test suite — run 43202789818](https://github.com/14vvp93/public_calculations/actions/runs/43202789818)
+The extraction run produced artifact `public-compute-extract-43205114889`, containing:
+- `archive-inventory.json` — SHA-256 inventory of the 26 original split volumes;
+- `archive-manifest.json` — per-member paths, sizes and SHA-256 values;
+- `archive-inventory.md` — human-readable archive summary;
+- `extracted/` — extracted archive trees.
 
-These are host-side infrastructure tests, not firmware analysis or MT8163 device tests.
+The artifact has 14-day retention and expires on 2026-11-26. Original source archives remain committed in the repository; the expanded tree is a reproducible temporary artifact.
 
-## Firmware import inventory
+## Extraction totals
 
-The source branch currently contains 48 approved firmware files totaling
-393,831,964 bytes (about 375.6 MiB):
+| Archive set | Files | Expanded bytes |
+|---|---:|---:|
+| `files2.zip` | 324 | 128,875,776 |
+| `HEQ.zip` | 1 | 168,811,733 |
+| `lib.zip` | 766 | 184,791,172 |
+| `vendor_lib.zip` | 325 | 104,706,028 |
+| **Total** | **1,416** | **587,184,709** |
 
-- 30 files under `reference-materials/firmware-dumps/`;
-- 17 split HEQ ZIP volumes;
-- the 183,368-byte `cd3313.ko` reference module.
+## First-pass audio findings
 
-The largest individual volume is 25,165,824 bytes, below GitHub's 100 MiB normal
-Git blob limit. The split inputs are imported byte-for-byte; no recompression occurs.
+See [MT8163 audio stack — first-pass findings](../reports/MT8163_AUDIO_STACK_FIRST_PASS.md).
 
-## One remaining external prerequisite
+Highest-priority follow-ups:
+1. Compare the two distinct `cd3313.ko` builds found in the standalone dump and `vendor_lib.zip`.
+2. Establish actual DSP selection and I2C probe behavior; three DSP driver modules are loaded by the supplied init configuration.
+3. Trace all `/dev/audiomux` clients across AudioFlinger, AudioPolicy, ExtAudioMuxer JNI and kernel drivers.
+4. Validate the Bluetooth SCO input channel mask and missing AudioPolicy include against the active runtime configuration.
+5. Map primary HAL PCM/mixer controls to the actual sound-card topology.
 
-The binary files cannot be transferred by the text-only GitHub file editor. The
-repository now contains a dedicated Actions importer that performs the transfer
-inside GitHub's runner.
+## Scope and limitations
 
-Before it can read the private source repository, add the Actions secret
-`SOURCE_REPO_READ_TOKEN` to `14vvp93/public_calculations`. It must be a fine-grained
-token from an identity that can read `14march93/mt8163_audio_engine`, restricted
-to that repository with **Contents: Read-only** permission. Do not paste the token
-into chat or commit it to a file.
-
-Then run **Actions → Import approved public MT8163 firmware → Run workflow** on
-`main`, using source ref `feature/cd3313-driver-rewrite` and
-`include_raw_dumps=true`. The workflow will create the firmware import commit
-and `firmware/manifests/mt8163-source-import.json`.
-
-Until that import succeeds and the hashes are verified, the public compute
-repository is infrastructure-ready but does not yet contain the binary firmware
-inputs. No archive-analysis job has been run against the imported data.
+All verification so far is host-side static analysis and GitHub Actions processing. No live MT8163 device was accessed, no kernel module was loaded, and no hardware state was changed. The canonical product repository has not yet received an implementation migration; that remains a separate project step.
 
 ## Phase 1 exit criteria
 
 - [x] Compute repository initialized and documented.
 - [x] Safe, reproducible archive processing tools and CI tests.
-- [x] Compute and import workflows prepared.
+- [x] Compute and import workflows prepared and verified.
+- [x] Public firmware import completed and SHA-256 manifest checked.
+- [x] All split archives reassembled, CRC-checked and extracted.
 - [x] Source workflow portability audit recorded.
-- [ ] Add the read-only source token secret.
-- [ ] Run the firmware import and verify the resulting manifest against the source.
-- [ ] Confirm public repository contents and exact imported file count/bytes.
+- [x] First-pass audio baseline report committed.
