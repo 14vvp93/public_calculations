@@ -1,0 +1,110 @@
+name: Import approved public MT8163 firmware
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Branch or tag in the private source repository
+        required: true
+        default: feature/cd3313-driver-rewrite
+        type: string
+      include_raw_dumps:
+        description: Also import standalone raw images and configuration dumps
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: import-mt8163-firmware
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout public compute repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate source ref and required credential
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+          SOURCE_TOKEN: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SOURCE_TOKEN" ]; then
+            echo "::error::Add SOURCE_REPO_READ_TOKEN as an Actions secret. It needs read-only Contents access to 14march93/mt8163_audio_engine."
+            exit 2
+          fi
+          if [[ "$SOURCE_REF" == *".."* ]] || ! git check-ref-format "refs/heads/$SOURCE_REF" >/dev/null 2>&1; then
+            echo "::error::Invalid source_ref"
+            exit 2
+          fi
+
+      - name: Checkout private source repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 14march93/mt8163_audio_engine
+          ref: ${{ inputs.source_ref }}
+          token: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
+          path: source
+          persist-credentials: false
+
+      - name: Import approved firmware inputs
+        env:
+          INCLUDE_RAW: ${{ inputs.include_raw_dumps }}
+        run: |
+          set -euo pipefail
+          src="$GITHUB_WORKSPACE/source/reference-materials/firmware-dumps"
+          test -d "$src"
+          mkdir -p firmware/archives/mt8163 firmware/dumps/mt8163
+          while IFS= read -r -d '' file; do
+            name="$(basename "$file")"
+            case "$name" in
+              *.zip|*.zip.*) dest="firmware/archives/mt8163/$name" ;;
+              *) if [ "$INCLUDE_RAW" = "true" ]; then dest="firmware/dumps/mt8163/$name"; else continue; fi ;;
+            esac
+            install -m 0644 -- "$file" "$dest"
+          done < <(find "$src" -maxdepth 1 -type f -print0)
+
+          heq="$GITHUB_WORKSPACE/source/reference-materials/heq"
+          if [ -d "$heq" ]; then
+            mkdir -p firmware/archives/mt8163/HEQ
+            find "$heq" -maxdepth 1 -type f -name 'HEQ.zip.*' -exec install -m 0644 -- {} firmware/archives/mt8163/HEQ/ \;
+          fi
+
+          kernel="$GITHUB_WORKSPACE/source/reference-materials/kernel/cd3313.ko"
+          if [ -f "$kernel" ]; then
+            mkdir -p firmware/dumps/mt8163/kernel
+            install -m 0644 -- "$kernel" firmware/dumps/mt8163/kernel/cd3313.ko
+          fi
+
+      - name: Build source and file integrity manifest
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          set -euo pipefail
+          python scripts/firmware/build_source_manifest.py \
+            --source-repository 14march93/mt8163_audio_engine \
+            --source-ref "$SOURCE_REF" \
+            --source-commit "$(git -C source rev-parse HEAD)" \
+            --output firmware/manifests/mt8163-source-import.json
+
+      - name: Commit imported public inputs
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add firmware/archives/mt8163 firmware/dumps/mt8163 firmware/manifests/mt8163-source-import.json
+          if git diff --cached --quiet; then
+            echo "No source changes; public firmware inputs are already up to date."
+            exit 0
+          fi
+          git commit -m "data: import approved MT8163 firmware from $SOURCE_REF"
+          git push origin HEAD:main
