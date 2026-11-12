@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Static MT8163 Android audio-stack and DSP-driver inventory."""
 from __future__ import annotations
-import argparse, hashlib, json, re, shutil, subprocess, xml.etree.ElementTree as ET
+import argparse, hashlib, json, re, shutil, struct, subprocess, xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -28,6 +28,71 @@ def elf(p):
     return {"class":field("Class"),"machine":field("Machine"),"type":field("Type"),
             "build_id":m.group(1) if m else None,
             "needed":re.findall(r"Shared library: \[(.*?)\]",d)}
+
+def parse_fdt(data):
+    if len(data) < 40:
+        raise ValueError("truncated FDT header")
+    magic,total,off_struct,off_strings,off_rsv,version,last,bootcpu,size_strings,size_struct=struct.unpack(">10I",data[:40])
+    if magic != 0xd00dfeed or total > len(data):
+        raise ValueError("invalid FDT header")
+    strings=data[off_strings:off_strings+size_strings]
+    block=data[off_struct:off_struct+size_struct]
+    def cstr(buf,offset):
+        end=buf.find(b"\0",offset)
+        if end < 0: raise ValueError("unterminated FDT string")
+        return buf[offset:end].decode("utf-8","replace"),end+1
+    pos=0; stack=[]; nodes=[]; current=None
+    while pos+4 <= len(block):
+        token=struct.unpack(">I",block[pos:pos+4])[0]; pos+=4
+        if token == 1:
+            name,pos=cstr(block,pos); pos=(pos+3)&~3
+            stack.append(name)
+            current={"path":"/"+"/".join(x for x in stack if x),"props":{}}
+            nodes.append(current)
+        elif token == 2:
+            if stack: stack.pop()
+            current=nodes[-1] if nodes else None
+        elif token == 3:
+            if current is None: raise ValueError("FDT property outside node")
+            length,nameoff=struct.unpack(">II",block[pos:pos+8]); pos+=8
+            prop,_=cstr(strings,nameoff)
+            value=block[pos:pos+length]; pos=(pos+length+3)&~3
+            current["props"][prop]=value
+        elif token == 4:
+            continue
+        elif token == 9:
+            break
+        else:
+            raise ValueError("unknown FDT structure token {}".format(token))
+    result=[]
+    for node in nodes:
+        props=node["props"]
+        compat=[x.decode("utf-8","replace") for x in props.get("compatible",b"").split(b"\0") if x]
+        status=props.get("status",b"").rstrip(b"\0").decode("utf-8","replace") or None
+        reg=props.get("reg",b"")
+        reg_cells=[hex(x) for x in struct.unpack(">"+("I"*(len(reg)//4)),reg)] if reg and len(reg)%4==0 else []
+        gp=props.get("mute-gpios",b"")
+        gpio_cells=[hex(x) for x in struct.unpack(">"+("I"*(len(gp)//4)),gp)] if gp and len(gp)%4==0 else []
+        result.append({"path":node["path"],"compatible":compat,"status":status,"reg_cells":reg_cells,"mute_gpio_cells":gpio_cells})
+    return {"version":version,"nodes":result}
+
+def inspect_dtbo(path):
+    data=path.read_bytes()
+    if len(data)<32: raise ValueError("truncated DTBO table")
+    magic,total,header_size,entry_size,count,entries_offset,page_size,version=struct.unpack(">8I",data[:32])
+    if magic!=0xd7b7ab1e or total>len(data) or entry_size<32:
+        raise ValueError("invalid Android DTBO table")
+    entries=[]; dsp_nodes=[]
+    for i in range(count):
+        off=entries_offset+i*entry_size
+        size,dt_off,dt_id,dt_rev,*custom=struct.unpack(">8I",data[off:off+32])
+        fdt=parse_fdt(data[dt_off:dt_off+size])
+        selected=[n for n in fdt["nodes"] if any(x in ["hcn,cd3313","hcn,ak7604","hcn,fy7604"] for x in n["compatible"])]
+        for n in selected: n["dtbo_entry"]=i
+        dsp_nodes.extend(selected)
+        entries.append({"index":i,"size":size,"offset":dt_off,"id":dt_id,"revision":dt_rev,"custom":custom,"fdt_version":fdt["version"]})
+    return {"total_size":total,"header_size":header_size,"entry_size":entry_size,"entry_count":count,
+            "page_size":page_size,"version":version,"entries":entries,"dsp_nodes":dsp_nodes}
 
 def main():
     p=argparse.ArgumentParser()
@@ -110,6 +175,9 @@ def main():
     for name in ["build.prop","default.prop"]:
         f=dumps/name
         if f.is_file(): props[name]=[z for z in f.read_text(encoding="utf-8",errors="replace").splitlines() if "ro.hw.dsp.chip" in z]
+    device_tree_overlay=None
+    dtbo_source=dumps/"dtbo.img"
+    if dtbo_source.is_file(): device_tree_overlay=inspect_dtbo(dtbo_source)
     firmware_images=[]
     image_dir=a.json.parent/"firmware-images"; image_dir.mkdir(parents=True,exist_ok=True)
     for name in ["boot.img","dtbo.img"]:
@@ -123,7 +191,7 @@ def main():
     data={"schema_version":1,"generated_at_utc":datetime.now(timezone.utc).isoformat(),
           "binaries":binaries,"audiomux_clients":clients,"cd3313_comparison":comparison,
           "audio_policy":policies,"audio_device_xml":mixer_info,"init_module_loading":init,
-          "dsp_chip_property_in_build_props":props,"firmware_images":firmware_images}
+          "dsp_chip_property_in_build_props":props,"firmware_images":firmware_images,"device_tree_overlay":device_tree_overlay}
     a.json.parent.mkdir(parents=True,exist_ok=True); a.markdown.parent.mkdir(parents=True,exist_ok=True)
     a.json.write_text(json.dumps(data,indent=2,ensure_ascii=False,sort_keys=True)+"\n",encoding="utf-8")
     lines=["# MT8163 audio stack inventory","",f"Generated: {data['generated_at_utc']}","","## Binaries","",
@@ -142,6 +210,10 @@ def main():
     if mixer_info: lines.append(f"- audio_device.xml: {len(mixer_info['stray_text_paths'])} paths with stray text; {len(mixer_info['duplicate_control_paths'])} paths with duplicate controls")
     lines += ["","## Firmware image string scan",""]
     for q in firmware_images: lines.append("- {}: {} bytes; SHA-256 {}; matches: {}".format(q["name"],q["size"],q["sha256"],q["strings_hits"]))
+    lines += ["","## DTBO DSP device nodes",""]
+    if device_tree_overlay:
+        lines.append("DTBO entries: {}; total declared bytes: {}".format(device_tree_overlay["entry_count"],device_tree_overlay["total_size"]))
+        for n in device_tree_overlay["dsp_nodes"]: lines.append("- {} compatible={} status={} reg={} mute-gpios={}".format(n["path"],n["compatible"],n["status"],n["reg_cells"],n["mute_gpio_cells"]))
     lines += ["","## DSP module loading",""]
     for name,q in init.items():
         lines.append(f"### {name}")
