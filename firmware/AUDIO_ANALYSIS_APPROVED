@@ -1,3 +1,5 @@
 # Approved one-time static audio-stack analysis
 # Scope: imported MT8163 firmware dumps and extracted archive sets
 # No device access, module loading or hardware writes
+
+# Trigger revision: include both CD3313 module binaries for diffing
