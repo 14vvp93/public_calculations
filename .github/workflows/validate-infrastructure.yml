@@ -29,6 +29,8 @@ jobs:
           python-version: "3.12"
       - name: Compile Python scripts
         run: python -m compileall -q scripts
+      - name: Run firmware tool tests
+        run: python -m unittest discover -s tests -v
       - name: Check scripts have CLI help
         run: |
           python scripts/firmware/archive_inventory.py --help
