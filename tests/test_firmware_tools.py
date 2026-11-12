@@ -60,7 +60,7 @@ class FirmwareToolTests(unittest.TestCase):
             self.assertFalse((root / "escape.txt").exists())
             backslash_archive = root / "bad-backslash.zip"
             with zipfile.ZipFile(backslash_archive, "w") as zf:
-                zf.writestr("..\\\\escape-backslash.txt", b"no")
+                zf.writestr("..\\escape-backslash.txt", b"no")
             with self.assertRaises(ValueError):
                 safe_extract.extract(backslash_archive, dest)
             self.assertFalse((root / "escape-backslash.txt").exists())
