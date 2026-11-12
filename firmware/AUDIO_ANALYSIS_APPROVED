@@ -7,3 +7,5 @@
 # Trigger revision: capture boot.img and dtbo.img for DSP device-tree triage
 
 # Trigger revision: report enabled DSP nodes from DTBO FDT overlay
+
+# Trigger revision: include DTBO i2c2 fixup mapping
