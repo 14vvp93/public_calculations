@@ -63,7 +63,7 @@ The standalone imported module at `firmware/dumps/mt8163/kernel/cd3313.ko` and t
 - standalone dump: 183,368 bytes; SHA-256 `b9ef172de1532867208fc620d4fe8d24612aa2ee4ad2d62ab2daaf6622387afb`; Build ID `dae15c9eb019e9388d15cb88088c202d017ebcf0`
 - archive member: 188,520 bytes; SHA-256 `6a96207794c770d05a9ba6981a25af9868f38ebac0391c1c6461cd20ed394594`; Build ID `e08637c02ef9a8c5077bb9ee12fd4b76dfb91d56`
 
-The archive member has Build ID `e08637c02ef9a8c5077bb9ee12fd4b76dfb91d56`. These must be treated as two distinct driver builds until the standalone dump is inspected and compared. Do not use the two copies interchangeably.
+These are two distinct driver builds. A section-level and symbol-level binary diff is still pending; do not use the two copies interchangeably.
 
 ### F-03 — Bluetooth SCO microphone profile uses an output channel mask
 
