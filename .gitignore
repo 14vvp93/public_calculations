@@ -10,3 +10,7 @@ dist/
 *.partial
 .DS_Store
 Thumbs.db
+
+# Full firmware extraction trees are reproducible and not committed by default.
+/firmware/extracted/**
+!/firmware/extracted/README.md
