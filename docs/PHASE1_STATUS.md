@@ -35,8 +35,8 @@ Last updated: 2026-11-12
 The infrastructure validation workflow completed successfully, including Python
 compilation, firmware tool unit tests and CLI checks:
 
-- [Run 43202035291](https://github.com/14vvp93/public_calculations/actions/runs/43202035291)
-- [Run 43201782822](https://github.com/14vvp93/public_calculations/actions/runs/43201782822)
+- [Latest full validation — run 43202475478](https://github.com/14vvp93/public_calculations/actions/runs/43202475478)
+- [Import workflow and size-guard validation — run 43202143602](https://github.com/14vvp93/public_calculations/actions/runs/43202143602)
 
 These are host-side infrastructure tests, not firmware analysis or MT8163 device tests.
 
