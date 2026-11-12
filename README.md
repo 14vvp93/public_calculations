@@ -59,11 +59,11 @@ Document retention and recreate large derived trees from immutable inputs and sc
 - [CD3313 ioctl and character-device ABI audit](reports/CD3313_IOCTL_ABI_AUDIT.md)
 - [ExtAudioMuxer JNI ↔ CD3313 ioctl ABI audit](reports/EXT_AUDIO_MUXER_JNI_ABI_AUDIT.md)
 - [Audio stack inventory script](scripts/firmware/audio_stack_inventory.py)
-- [Latest static audio inventory run](https://github.com/14vvp93/public_calculations/actions/runs/43206552330)
+- [Latest static audio inventory run](https://github.com/14vvp93/public_calculations/actions/runs/43210027838)
 
 ## Status
 
 Phase 1 is complete: all 48 approved firmware inputs were imported and hash-verified,
 and all four split archive sets were reassembled, CRC-checked and extracted. The first-pass
-audio-stack findings are documented in the report linked above. The first static audio inventory is complete ([run 43206552330](https://github.com/14vvp93/public_calculations/actions/runs/43206552330)). Analysis is host-side only;
+audio-stack findings are documented in the linked reports. The static inventory now parses both the embedded base DTB and DTBO overlay, and compares the DSP module variants. Analysis is host-side only;
 no live MT8163 device has been accessed.
