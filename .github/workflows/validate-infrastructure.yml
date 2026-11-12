@@ -41,3 +41,4 @@ jobs:
           python scripts/firmware/safe_extract.py --help
           python scripts/firmware/process_archive_sets.py --help
           python scripts/firmware/build_source_manifest.py --help
+          python scripts/firmware/import_public_firmware.py --help
