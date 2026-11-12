@@ -220,32 +220,33 @@ class FirmwareToolTests(unittest.TestCase):
             self.assertTrue(output_md.is_file())
 
 
+
     def test_audio_stack_inventory_parses_dtbo_dsp_nodes(self):
         import struct
 
+        zero = bytes([0])
         def align4(value):
             return (value + 3) & ~3
 
-        strings = b"compatible\\0status\\0reg\\0"
+        strings = b"compatible" + zero + b"status" + zero + b"reg" + zero
         structure = bytearray()
-        structure += struct.pack(">I", 1) + b"\\0"
-        structure += b"\\0" * (align4(len(structure)) - len(structure))
-        structure += struct.pack(">I", 1) + b"cd3313@44\\0"
-        structure += b"\\0" * (align4(len(structure)) - len(structure))
+        structure += struct.pack(">I", 1) + zero
+        structure += zero * (align4(len(structure)) - len(structure))
+        structure += struct.pack(">I", 1) + b"cd3313@44" + zero
+        structure += zero * (align4(len(structure)) - len(structure))
         def prop(nameoff, value):
-            nonlocal structure
             structure.extend(struct.pack(">III", 3, len(value), nameoff))
             structure.extend(value)
-            structure.extend(b"\\0" * (align4(len(structure)) - len(structure)))
-        prop(0, b"hcn,cd3313\\0")
-        prop(len(b"compatible\\0"), b"okay\\0")
-        prop(len(b"compatible\\0status\\0"), struct.pack(">I", 0x44))
+            structure.extend(zero * (align4(len(structure)) - len(structure)))
+        prop(0, b"hcn,cd3313" + zero)
+        prop(len(b"compatible") + 1, b"okay" + zero)
+        prop(len(b"compatible") + len(b"status") + 2, struct.pack(">I", 0x44))
         structure += struct.pack(">I", 2) + struct.pack(">I", 2) + struct.pack(">I", 9)
         off_struct = 56
         off_strings = off_struct + len(structure)
         total = off_strings + len(strings)
         fdt = struct.pack(">10I", 0xd00dfeed, total, off_struct, off_strings, 40, 17, 16, 0, len(strings), len(structure))
-        fdt += b"\\0" * 16 + bytes(structure) + strings
+        fdt += zero * 16 + bytes(structure) + strings
         dtbo_total = 64 + len(fdt)
         dtbo = struct.pack(">8I", 0xd7b7ab1e, dtbo_total, 32, 32, 1, 32, 2048, 0)
         dtbo += struct.pack(">8I", len(fdt), 64, 0, 0, 0, 0, 0, 0) + fdt
