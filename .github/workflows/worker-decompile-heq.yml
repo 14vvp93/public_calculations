@@ -1,0 +1,76 @@
+name: Decompile and inspect HEQ
+
+on:
+  workflow_call:
+    inputs:
+      source_ref:
+        description: Immutable branch, tag, or commit in the primary repository
+        required: false
+        type: string
+        default: main
+    secrets:
+      SOURCE_REPO_READ_TOKEN:
+        required: true
+permissions:
+  contents: read
+
+jobs:
+  decompile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out primary repository at requested revision
+        uses: actions/checkout@v5
+        with:
+          repository: 14vvp93/mt8163_audio_engine
+          ref: ${{ inputs.source_ref }}
+          token: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
+          path: source
+          persist-credentials: false
+      - name: Reassemble and verify HEQ APK from committed chunks
+        run: |
+          mkdir -p input
+          python3 source/scripts/repository/reassemble_heq_apk.py --output input/HEQ.apk
+          sha256sum input/HEQ.apk | tee apk.sha256
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Download JADX
+        run: |
+          VERSION=1.5.1
+          curl -fL "https://github.com/skylot/jadx/releases/download/v${VERSION}/jadx-${VERSION}.zip" -o jadx.zip
+          mkdir jadx
+          unzip -q jadx.zip -d jadx
+          chmod +x jadx/bin/jadx
+
+      - name: Decompile APK
+        run: |
+          jadx/bin/jadx --no-res --show-bad-code --threads-count 2 -d decompiled input/HEQ.apk
+          find decompiled -type f | sort > decompiled-files.txt
+
+      - name: Extract targeted algorithm and DSP references
+        run: |
+          mkdir -p report
+          for term in 'class Biquad' 'class EqualizerController' 'class EqualizerTransaction' 'class NativeHelper' 'class Ak7604' 'class CSC37534' 'class FY7604' 'class SI47925' 'FY_CMD_SUB_ID_SET_PEQ' 'FY_DSP_BAND_FILE' 'setEqualizer' 'setBandLevel'; do
+            safe=$(printf '%s' "$term" | tr ' /' '__' | tr -cd '[:alnum:]_.-')
+            grep -RIn --include='*.java' -F "$term" decompiled > "report/$safe.txt" || true
+          done
+          grep -RIn --include='*.java' -E 'class (Biquad|EqualizerController|EqualizerTransaction|NativeHelper|Ak7604|CSC37534|FY7604|SI47925)' decompiled > report/target-classes.txt || true
+          grep -RIn --include='*.java' -E 'PEQ|BIQUAD|FREQ|FREQUENCY|Q_FACTOR|GAIN|BALANCE|ATTENUATION|DELAY|HLPF|SURROUND|REVERB' decompiled > report/dsp-parameters.txt || true
+          du -sh decompiled
+          wc -l report/*.txt
+
+      - name: Upload decompiled source and reports
+        uses: actions/upload-artifact@v6
+        with:
+          name: heq-decompiled-analysis
+          path: |
+            decompiled/
+            report/
+            decompiled-files.txt
+            apk.sha256
+          retention-days: 14
