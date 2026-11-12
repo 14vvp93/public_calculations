@@ -9,3 +9,5 @@
 # Trigger revision: report enabled DSP nodes from DTBO FDT overlay
 
 # Trigger revision: include DTBO i2c2 fixup mapping
+
+# Trigger revision: export DTBO I2C bus fixup and latest ABI report state
