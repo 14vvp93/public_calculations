@@ -220,5 +220,56 @@ class FirmwareToolTests(unittest.TestCase):
             self.assertTrue(output_md.is_file())
 
 
+    def test_audio_stack_inventory_parses_dtbo_dsp_nodes(self):
+        import struct
+
+        def align4(value):
+            return (value + 3) & ~3
+
+        strings = b"compatible\\0status\\0reg\\0"
+        structure = bytearray()
+        structure += struct.pack(">I", 1) + b"\\0"
+        structure += b"\\0" * (align4(len(structure)) - len(structure))
+        structure += struct.pack(">I", 1) + b"cd3313@44\\0"
+        structure += b"\\0" * (align4(len(structure)) - len(structure))
+        def prop(nameoff, value):
+            nonlocal structure
+            structure.extend(struct.pack(">III", 3, len(value), nameoff))
+            structure.extend(value)
+            structure.extend(b"\\0" * (align4(len(structure)) - len(structure)))
+        prop(0, b"hcn,cd3313\\0")
+        prop(len(b"compatible\\0"), b"okay\\0")
+        prop(len(b"compatible\\0status\\0"), struct.pack(">I", 0x44))
+        structure += struct.pack(">I", 2) + struct.pack(">I", 2) + struct.pack(">I", 9)
+        off_struct = 56
+        off_strings = off_struct + len(structure)
+        total = off_strings + len(strings)
+        fdt = struct.pack(">10I", 0xd00dfeed, total, off_struct, off_strings, 40, 17, 16, 0, len(strings), len(structure))
+        fdt += b"\\0" * 16 + bytes(structure) + strings
+        dtbo_total = 64 + len(fdt)
+        dtbo = struct.pack(">8I", 0xd7b7ab1e, dtbo_total, 32, 32, 1, 32, 2048, 0)
+        dtbo += struct.pack(">8I", len(fdt), 64, 0, 0, 0, 0, 0, 0) + fdt
+
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            extracted = root / "extracted"
+            (extracted / "files2/files2/vendor").mkdir(parents=True)
+            dumps = root / "dumps"
+            dumps.mkdir()
+            (dumps / "dtbo.img").write_bytes(dtbo)
+            output_json = root / "inventory.json"
+            output_md = root / "inventory.md"
+            subprocess.run([
+                sys.executable, str(ROOT / "scripts/firmware/audio_stack_inventory.py"),
+                "--extracted-root", str(extracted), "--dump-root", str(dumps),
+                "--json", str(output_json), "--markdown", str(output_md)
+            ], check=True, capture_output=True, text=True)
+            result = json.loads(output_json.read_text(encoding="utf-8"))
+            node = result["device_tree_overlay"]["dsp_nodes"][0]
+            self.assertEqual(node["compatible"], ["hcn,cd3313"])
+            self.assertEqual(node["status"], "okay")
+            self.assertEqual(node["reg_cells"], ["0x44"])
+
+
 if __name__ == "__main__":
     unittest.main()
