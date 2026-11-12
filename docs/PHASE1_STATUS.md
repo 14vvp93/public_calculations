@@ -19,18 +19,18 @@ Last updated: 2026-11-12
 
 ## Verification runs
 
-- [Infrastructure validation — run 43206534636](https://github.com/14vvp93/public_calculations/actions/runs/43206534636) — success.
+- [Infrastructure validation — run 43209938648](https://github.com/14vvp93/public_calculations/actions/runs/43209938648) — success.
 - [Firmware import — run 43204393764](https://github.com/14vvp93/public_calculations/actions/runs/43204393764) — success.
 - [Archive inventory and extraction — run 43205114889](https://github.com/14vvp93/public_calculations/actions/runs/43205114889) — success.
-- [Audio-stack static inventory — run 43206552330](https://github.com/14vvp93/public_calculations/actions/runs/43206552330) — success.
+- [Audio-stack, base-DTB and DTBO static inventory — run 43210027838](https://github.com/14vvp93/public_calculations/actions/runs/43210027838) — success.
 
-The extraction run produced artifact `public-compute-extract-43205114889`, containing:
+The latest analysis run produced artifact `public-compute-extract-43210027838`, containing:
 - `archive-inventory.json` — SHA-256 inventory of the 26 original split volumes;
 - `archive-manifest.json` — per-member paths, sizes and SHA-256 values;
 - `archive-inventory.md` — human-readable archive summary;
 - `extracted/` — extracted archive trees.
 
-The artifact has 14-day retention and expires on 2026-11-26. Original source archives remain committed in the repository; the expanded tree is a reproducible temporary artifact.
+The artifact has 14-day retention and expires on 2026-11-26. It also contains both CD3313 module variants, `boot.img`, `dtbo.img`, ELF metadata, DTBO fixups and the parsed base I2C-controller state. Original source archives remain committed in the repository; the expanded tree is a reproducible temporary artifact.
 
 ## Extraction totals
 
@@ -44,11 +44,11 @@ The artifact has 14-day retention and expires on 2026-11-26. Original source arc
 
 ## First-pass audio findings
 
-See [MT8163 audio stack — first-pass findings](../reports/MT8163_AUDIO_STACK_FIRST_PASS.md). The automated report also records the distinct standalone/vendor `cd3313.ko` builds, the SCO input channel-mask mismatch, missing AudioPolicy include, mixer XML anomalies and init-property discrepancies.
+See [MT8163 audio control architecture](AUDIO_CONTROL_ARCHITECTURE.md), [MT8163 audio stack — first-pass findings](../reports/MT8163_AUDIO_STACK_FIRST_PASS.md), [DSP driver ownership analysis](../reports/DSP_DRIVER_OWNERSHIP_ANALYSIS.md), [CD3313 module variant comparison](../reports/CD3313_MODULE_VARIANT_DIFF.md), [CD3313 ioctl ABI audit](../reports/CD3313_IOCTL_ABI_AUDIT.md) and [ExtAudioMuxer JNI ABI audit](../reports/EXT_AUDIO_MUXER_JNI_ABI_AUDIT.md).
 
 Highest-priority follow-ups:
-1. Compare the two distinct `cd3313.ko` builds found in the standalone dump and `vendor_lib.zip`.
-2. Establish actual DSP selection and I2C probe behavior; three DSP driver modules are loaded by the supplied init configuration.
+1. Confirm actual DSP probe success/failure from read-only target logs; the DTBO enables three nodes that share one `audiomux` misc-device name.
+2. Reconcile the JNI one-word over-read and CD3313 short-payload validation gaps with all userspace callers.
 3. Resolve the shared `audiomux` misc-device registration conflict against actual I2C probe logs.\n4. Reconcile the ExtAudioMuxer JNI one-word over-read with kernel payload validation and command-specific ABI lengths.\n5. Trace all `/dev/audiomux` clients across AudioFlinger, AudioPolicy, ExtAudioMuxer JNI and kernel drivers.
 4. Validate the Bluetooth SCO input channel mask and missing AudioPolicy include against the active runtime configuration.
 5. Map primary HAL PCM/mixer controls to the actual sound-card topology.
