@@ -60,6 +60,54 @@ jobs:
           path: source
           persist-credentials: false
 
+      - name: Copy and verify extracted firmware tree
+        env:
+          SOURCE_COMMIT: ${{ inputs.source_ref || 'feature/cd3313-driver-rewrite' }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, pathlib, shutil
+          source = pathlib.Path("source/reference-materials/extracted")
+          destination = pathlib.Path("firmware/extracted")
+          manifest_path = source / "manifest.json"
+          if not manifest_path.is_file():
+              raise SystemExit("Private extracted firmware manifest is missing")
+          manifest = json.loads(manifest_path.read_text())
+          entries = manifest.get("files", [])
+          if manifest.get("file_count") != len(entries) or len(entries) != 1386:
+              raise SystemExit(f"Unexpected extracted manifest count: {len(entries)}")
+          if destination.exists():
+              shutil.rmtree(destination)
+          destination.mkdir(parents=True)
+          copied = []
+          for item in entries:
+              rel = pathlib.PurePosixPath(item["path"]).relative_to("reference-materials/extracted")
+              src = source.joinpath(*rel.parts)
+              dst = destination.joinpath(*rel.parts)
+              if src.is_symlink() or not src.is_file():
+                  raise SystemExit(f"Missing or symlinked extracted firmware file: {src}")
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(src, dst)
+              digest = hashlib.sha256(dst.read_bytes()).hexdigest()
+              if dst.stat().st_size != item["size"] or digest != item["sha256"]:
+                  raise SystemExit(f"SHA-256 verification failed: {rel}")
+              copied.append({"path": (pathlib.Path("firmware/extracted") / rel).as_posix(),
+                             "size": item["size"], "sha256": digest,
+                             "source": item.get("source", "private extracted manifest")})
+          out = {
+              "schema_version": 1,
+              "source_repository": "14vvp93/mt8163_audio_engine",
+              "source_ref": "${SOURCE_COMMIT}",
+              "source_manifest": "reference-materials/extracted/manifest.json",
+              "file_count": len(copied),
+              "total_bytes": sum(x["size"] for x in copied),
+              "files": copied,
+          }
+          pathlib.Path("firmware/manifests/mt8163-extracted.json").write_text(
+              json.dumps(out, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          print(f"Copied and SHA-256 verified {len(copied)} extracted firmware files")
+          PY
+
       - name: Import and verify approved firmware inputs
         env:
           INCLUDE_RAW: ${{ github.event_name == 'push' || inputs.include_raw_dumps }}
@@ -95,7 +143,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add firmware/archives/mt8163 firmware/dumps/mt8163 firmware/manifests/mt8163-source-import.json
+          git add firmware/archives/mt8163 firmware/dumps/mt8163 firmware/extracted firmware/manifests/mt8163-source-import.json firmware/manifests/mt8163-extracted.json
           if git diff --cached --quiet; then
             echo "No source changes; public firmware inputs are already up to date."
             exit 0
