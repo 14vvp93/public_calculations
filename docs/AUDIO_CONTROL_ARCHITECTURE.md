@@ -39,6 +39,20 @@ The primary HAL contains distinct stream/provider classes for speaker/headphone 
 
 The vendor `audio_device.xml` describes mixer paths and controls such as speaker-class switch, speaker/headphone amplifier, ADC switches, mic modes and sidetone. It parses as XML but contains stray text after some self-closing `kctl` nodes and one duplicated ADC-off control; these are preserved as source evidence.
 
+### Mixer path inventory from `audio_device.xml`
+
+The primary HAL contains `AudioALSADeviceParser` and `AudioALSADeviceConfigManager` components, matching the supplied mixer XML. The extracted paths include:
+
+- Receiver: `Voice_Amp_Switch` on/off.
+- Two-in-one speaker: `Audio_Speaker_class_Switch=CLASSAB` for turn-on and `RECEIVER` for turn-off.
+- Headphone/speaker: `Headset_Speaker_Amp_Switch` on/off.
+- Built-in mic variants: Mic1, Mic3, SingleMic, DualMic and BackMic, with ADC source, ADC switch and preamp selections.
+- Wired headset microphone: ADC2/ADC3 source and preamp selections.
+- Sidetone: `Audio_Sidetone_Switch` on/off.
+- Four microphone bias/mode selector groups: ACC, DCC, DMIC and ECM variants.
+
+The XML's `builtin_Mic_Mic3/turnoff` repeats `Audio_ADC_3_Switch=Off`. Other mic source/preamp combinations should be compared with the board wiring before porting; the XML alone is not enough to infer the physical mic topology.
+
 ### External DSP command plane
 
 - The native class `android/sourceservice/ExtAudioMuxer` registers `SendCmdAudioMux(int, int[])`.
