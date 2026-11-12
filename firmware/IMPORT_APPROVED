@@ -8,3 +8,4 @@ This marker is intentionally not removed by the import workflow. The workflow on
 runs on pushes that change this exact file, so later unrelated pushes do not rerun it.
 
 One-time synchronization: copy the complete SHA-256-verified extracted firmware tree from the private canonical source into firmware/extracted. Keep this marker until sync succeeds.
+Verified extracted tree synchronization retry after enabling tracking and authenticated push.
