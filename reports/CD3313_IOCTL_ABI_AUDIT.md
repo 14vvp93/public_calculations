@@ -23,7 +23,7 @@ The callback decodes the command type from the header and reads payload words fr
 | `0x01` input channel | Reads first payload word | Checks encoded word count is nonzero |
 | `0x03` input gain | Reads payload words at +4 and +8 | **No visible minimum-length check before reads** |
 | `0x04` input mute | Reads three payload words | Checks count > 2 |
-| `0x09` auxiliary state/event | Reads payload word at +4 | **No visible minimum-length check before read** |
+| `0x09` command | Reads payload word at +4 | **No visible minimum-length check before read** |
 | `0x10` master volume | Reads first payload word | Checks count is nonzero |
 | `0x11` master mute reason | Reads two payload words | Checks count > 1 |
 | `0x12` volume percentage | Reads payload | Checks count > 1 |
@@ -35,7 +35,7 @@ The callback decodes the command type from the header and reads payload words fr
 | `0xA3` subwoofer GPIO | Reads payload word at +4, then changes GPIO | **No visible minimum-length check before read** |
 | `0xF1` DSP shutdown/wakeup | Reads first payload word | Checks count is nonzero |
 
-The highlighted cases can consume uninitialized bytes from the command allocation when userspace supplies a short payload. The exact effects depend on the JNI caller's encoded `_IOC_SIZE` and array construction, which must be reviewed alongside this kernel code.
+The highlighted cases can consume uninitialized bytes from the command allocation when userspace supplies a short payload. The ioctl path allocates with `kmem_cache_alloc` (not a zeroing allocator), stores the header and copies only the encoded payload length; it does not clear the remainder after a successful short copy. The callback can therefore read stale slab contents as missing command fields. The exact effects depend on the JNI caller's encoded `_IOC_SIZE` and array construction, which must be reviewed alongside this kernel code.
 
 ## 3. Status is cached state, not physical readback
 
