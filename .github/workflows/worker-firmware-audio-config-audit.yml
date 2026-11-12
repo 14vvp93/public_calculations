@@ -44,7 +44,7 @@ jobs:
           rows = []
           failures = []
           for item in manifest["files"]:
-              path = Path(item["path"])
+              path = root / item["path"]
               if not path.is_file():
                   failures.append(f"MISSING {path}")
                   continue
