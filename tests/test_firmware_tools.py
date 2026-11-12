@@ -182,5 +182,43 @@ class FirmwareToolTests(unittest.TestCase):
             self.assertEqual(manifest["files"][0]["sha256"], hashlib.sha256(payload).hexdigest())
 
 
+    def test_audio_stack_inventory_reports_policy_and_mixer_anomalies(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            extracted = root / "extracted"
+            vendor = extracted / "files2/files2/vendor"
+            system = extracted / "files2/files2/system"
+            dumps = root / "dumps"
+            vendor.mkdir(parents=True)
+            system.mkdir(parents=True)
+            dumps.mkdir()
+            (vendor / "audio_policy_configuration.xml").write_text(
+                '<?xml version="1.0"?><audioPolicyConfiguration xmlns:xi="http://www.w3.org/2001/XInclude">'
+                '<modules><module name="primary"><devicePorts><devicePort tagName="BT SCO Headset Mic" role="source">'
+                '<profile channelMasks="AUDIO_CHANNEL_OUT_STEREO"/></devicePort></devicePorts></module></modules>'
+                '<xi:include href="missing_volume_tables.xml"/></audioPolicyConfiguration>', encoding="utf-8")
+            (vendor / "audio_device.xml").write_text(
+                '<mixercontrol><path name="mic" value="off">><kctl name="ADC" value="Off"/></path></mixercontrol>',
+                encoding="utf-8")
+            (dumps / "init.mt8163.rc").write_text(
+                'insmod /vendor/lib/modules/cd3313.ko\n'
+                'insmod /vendor/lib/modules/ak7604.ko channel_gain=${ro.hw.ak7604.gain:-2,-2,2,0}\n',
+                encoding="utf-8")
+            (dumps / "build.prop").write_text("", encoding="utf-8")
+            (dumps / "default.prop").write_text("", encoding="utf-8")
+            output_json = root / "inventory.json"
+            output_md = root / "inventory.md"
+            subprocess.run([
+                sys.executable, str(ROOT / "scripts/firmware/audio_stack_inventory.py"),
+                "--extracted-root", str(extracted), "--dump-root", str(dumps),
+                "--json", str(output_json), "--markdown", str(output_md)
+            ], check=True, capture_output=True, text=True)
+            result = json.loads(output_json.read_text(encoding="utf-8"))
+            self.assertEqual(result["audio_policy"][0]["missing_includes"], ["missing_volume_tables.xml"])
+            self.assertEqual(result["audio_policy"][0]["input_output_mask_mismatches"][0]["port"], "BT SCO Headset Mic")
+            self.assertEqual(len(result["audio_device_xml"]["stray_text_paths"]), 1)
+            self.assertTrue(output_md.is_file())
+
+
 if __name__ == "__main__":
     unittest.main()
