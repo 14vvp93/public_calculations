@@ -110,10 +110,20 @@ def main():
     for name in ["build.prop","default.prop"]:
         f=dumps/name
         if f.is_file(): props[name]=[z for z in f.read_text(encoding="utf-8",errors="replace").splitlines() if "ro.hw.dsp.chip" in z]
+    firmware_images=[]
+    image_dir=a.json.parent/"firmware-images"; image_dir.mkdir(parents=True,exist_ok=True)
+    for name in ["boot.img","dtbo.img"]:
+        source=dumps/name
+        if source.is_file():
+            target=image_dir/name; shutil.copy2(source,target)
+            hits=[z for z in cmd(["strings","-a",str(source)]).splitlines()
+                  if any(k in z.lower() for k in ["cd3313","ak7604","fy7604","audiomux","i2c","mediatek,audio","audio-dsp"])]
+            firmware_images.append({"name":name,"size":source.stat().st_size,"sha256":digest(source),
+                                    "strings_hits":hits[:200],"artifact_copy":"firmware-images/"+name})
     data={"schema_version":1,"generated_at_utc":datetime.now(timezone.utc).isoformat(),
           "binaries":binaries,"audiomux_clients":clients,"cd3313_comparison":comparison,
           "audio_policy":policies,"audio_device_xml":mixer_info,"init_module_loading":init,
-          "dsp_chip_property_in_build_props":props}
+          "dsp_chip_property_in_build_props":props,"firmware_images":firmware_images}
     a.json.parent.mkdir(parents=True,exist_ok=True); a.markdown.parent.mkdir(parents=True,exist_ok=True)
     a.json.write_text(json.dumps(data,indent=2,ensure_ascii=False,sort_keys=True)+"\n",encoding="utf-8")
     lines=["# MT8163 audio stack inventory","",f"Generated: {data['generated_at_utc']}","","## Binaries","",
@@ -130,6 +140,8 @@ def main():
     lines += ["","## AudioPolicy and mixer XML",""]
     for q in policies: lines.append(f"- {q['path']}: missing includes={q['missing_includes']}; input/output mask mismatches={q['input_output_mask_mismatches']}")
     if mixer_info: lines.append(f"- audio_device.xml: {len(mixer_info['stray_text_paths'])} paths with stray text; {len(mixer_info['duplicate_control_paths'])} paths with duplicate controls")
+    lines += ["","## Firmware image string scan",""]
+    for q in firmware_images: lines.append("- {}: {} bytes; SHA-256 {}; matches: {}".format(q["name"],q["size"],q["sha256"],q["strings_hits"]))
     lines += ["","## DSP module loading",""]
     for name,q in init.items():
         lines.append(f"### {name}")
