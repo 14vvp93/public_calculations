@@ -6,7 +6,7 @@ import argparse, hashlib, json, pathlib, tarfile, zipfile
 CHUNK = 1024 * 1024
 
 def safe_target(root: pathlib.Path, member: str) -> pathlib.Path:
-    name = pathlib.PurePosixPath(member)
+    name = pathlib.PurePosixPath(member.replace("\\\\", "/"))
     if name.is_absolute() or any(part in ("..", "") for part in name.parts):
         raise ValueError(f"Unsafe archive path: {member!r}")
     target = (root / pathlib.Path(*name.parts)).resolve()
@@ -14,6 +14,16 @@ def safe_target(root: pathlib.Path, member: str) -> pathlib.Path:
     if target != base and base not in target.parents:
         raise ValueError(f"Archive path escapes destination: {member!r}")
     return target
+
+def sha256_file(path: pathlib.Path):
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while True:
+            block = stream.read(CHUNK)
+            if not block:
+                break
+            digest.update(block)
+    return digest.hexdigest()
 
 def write_member(src, target):
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -65,7 +75,7 @@ def main():
     a=p.parse_args()
     rows=extract(a.archive,a.destination)
     manifest={"schema_version":1,"source_archive":a.archive.name,
-              "source_sha256":hashlib.sha256(a.archive.read_bytes()).hexdigest(),
+              "source_sha256":sha256_file(a.archive),
               "extracted_count":len(rows),"files":rows}
     out=a.manifest or a.destination/"manifest.json"
     out.parent.mkdir(parents=True,exist_ok=True)
