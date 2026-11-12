@@ -51,8 +51,9 @@ Document retention and recreate large derived trees from immutable inputs and sc
 - [Workflow catalog](docs/WORKFLOWS.md)
 - [Workflow migration map](docs/WORKFLOW_MIGRATION_MAP.md)
 - [Firmware import from the private source repository](docs/FIRMWARE_IMPORT.md)
+- [Phase 1 status and exit criteria](docs/PHASE1_STATUS.md)
 
 ## Status
 
-Infrastructure bootstrap is in progress. No firmware archive is assumed to be
-present until it is uploaded and verified in this repository.
+Infrastructure bootstrap and CI validation are complete. The binary firmware import
+is prepared but awaits the read-only source token secret and a manual import run.
