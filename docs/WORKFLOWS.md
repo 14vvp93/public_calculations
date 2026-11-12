@@ -1,16 +1,25 @@
 # Workflow catalog
 
+## Public compute repository
+
 | Workflow | Trigger | Purpose | Writes |
 |---|---|---|---|
-| `compute.yml` | Manual dispatch only | Run archive inventory and split-aware extraction | Actions artifact only |
-| `import-public-firmware.yml` | Manual dispatch on main | Import owner-approved firmware from the private source repo | Commits firmware and SHA-256 manifest to public main |
-| `validate-infrastructure.yml` | Push / pull request | Compile scripts and run unit tests | No repository writes |
-| `validate-infrastructure.yml` | Pull request / push to main | Validate scripts and workflow structure | No repository writes |
+| `compute.yml` | Reusable call / manual dispatch / approval-marker push | Archive inventory, safe split-ZIP extraction, audio inventory | Actions artifact only |
+| `import-public-firmware.yml` | Manual dispatch / approval marker on main | Import approved public firmware from `14vvp93/mt8163_audio_engine` | Commits approved firmware and SHA-256 manifest to public main |
+| `validate-infrastructure.yml` | Push / pull request | Validate workflow YAML, Python scripts and tests | No repository writes |
+
+## Primary repository entry point
+
+| Workflow | Trigger | Purpose | Writes |
+|---|---|---|---|
+| `run-public-compute.yml` | Manual dispatch | Call the reusable worker in `14vvp93/public_calculations` | Worker artifact attached to the caller run |
 
 ## Operating rules
 
-- Expensive analysis is opt-in and manually dispatched.
+- Use the primary repository as the operator-facing entry point.
+- Dispatch expensive compute explicitly; do not run full firmware analysis for ordinary
+  source-code edits.
 - Validation is lightweight and must not unpack full firmware archives.
-- No workflow commits or pushes generated results automatically.
-- Artifacts are temporary; durable findings are reviewed before committing.
+- The worker does not commit generated reports automatically.
+- Artifacts are temporary; durable findings are reviewed before promotion.
 - All workflows use least-privilege permissions and bounded runtime.
