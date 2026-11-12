@@ -49,6 +49,7 @@ Document retention and recreate large derived trees from immutable inputs and sc
 - [Compute worker contract](docs/COMPUTE_WORKER.md)
 - [Firmware data policy](docs/FIRMWARE_DATA_POLICY.md)
 - [Workflow catalog](docs/WORKFLOWS.md)
+- [Workflow migration map](docs/WORKFLOW_MIGRATION_MAP.md)
 - [Firmware import from the private source repository](docs/FIRMWARE_IMPORT.md)
 
 ## Status
