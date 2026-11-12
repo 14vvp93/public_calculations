@@ -78,6 +78,23 @@ def parse_fdt(data):
         result.append({"path":node["path"],"compatible":compat,"status":status,"reg_cells":reg_cells,"mute_gpio_cells":gpio_cells})
     return {"version":version,"nodes":result,"fixups":fixups}
 
+def inspect_boot_dtb(path):
+    data=path.read_bytes(); pos=0
+    magic=b"\xd0\x0d\xfe\xed"
+    while True:
+        pos=data.find(magic,pos)
+        if pos<0: return None
+        try:
+            fdt=parse_fdt(data[pos:])
+            controllers=[{"path":n["path"],"compatible":n["compatible"],"status":n["status"],"reg_cells":n["reg_cells"]}
+                         for n in fdt["nodes"] if "/i2c@" in n["path"]]
+            if controllers:
+                return {"offset":pos,"size":struct.unpack(">I",data[pos+4:pos+8])[0],
+                        "version":fdt["version"],"i2c_controllers":controllers}
+        except Exception:
+            pass
+        pos+=4
+
 def inspect_dtbo(path):
     data=path.read_bytes()
     if len(data)<32: raise ValueError("truncated DTBO table")
@@ -179,6 +196,9 @@ def main():
         if f.is_file(): props[name]=[z for z in f.read_text(encoding="utf-8",errors="replace").splitlines() if "ro.hw.dsp.chip" in z]
     vdex=root/"files2/files2/framework/boot-carservices.vdex"
     vdex_property_refs=[z for z in cmd(["strings","-a",str(vdex)]).splitlines() if "ro.hw.dsp.chip" in z] if vdex.is_file() else []
+    boot_device_tree=None
+    boot_source=dumps/"boot.img"
+    if boot_source.is_file(): boot_device_tree=inspect_boot_dtb(boot_source)
     device_tree_overlay=None
     dtbo_source=dumps/"dtbo.img"
     if dtbo_source.is_file(): device_tree_overlay=inspect_dtbo(dtbo_source)
@@ -195,7 +215,7 @@ def main():
     data={"schema_version":1,"generated_at_utc":datetime.now(timezone.utc).isoformat(),
           "binaries":binaries,"audiomux_clients":clients,"cd3313_comparison":comparison,
           "audio_policy":policies,"audio_device_xml":mixer_info,"init_module_loading":init,
-          "dsp_chip_property_in_build_props":props,"dsp_chip_property_references_in_vdex":vdex_property_refs,"firmware_images":firmware_images,"device_tree_overlay":device_tree_overlay}
+          "dsp_chip_property_in_build_props":props,"dsp_chip_property_references_in_vdex":vdex_property_refs,"firmware_images":firmware_images,"device_tree_overlay":device_tree_overlay,"boot_device_tree":boot_device_tree}
     a.json.parent.mkdir(parents=True,exist_ok=True); a.markdown.parent.mkdir(parents=True,exist_ok=True)
     a.json.write_text(json.dumps(data,indent=2,ensure_ascii=False,sort_keys=True)+"\n",encoding="utf-8")
     lines=["# MT8163 audio stack inventory","",f"Generated: {data['generated_at_utc']}","","## Binaries","",
@@ -215,6 +235,10 @@ def main():
     lines += ["","## Firmware image string scan",""]
     for q in firmware_images: lines.append("- {}: {} bytes; SHA-256 {}; matches: {}".format(q["name"],q["size"],q["sha256"],q["strings_hits"]))
     if vdex_property_refs: lines += ["","## DSP selector property references","", "- boot-carservices.vdex: "+str(vdex_property_refs)]
+    if boot_device_tree:
+        lines += ["","## Base boot DTB I2C controllers",""]
+        lines.append("Embedded DTB offset: {}; size: {}".format(hex(boot_device_tree["offset"]),boot_device_tree["size"]))
+        for n in boot_device_tree["i2c_controllers"]: lines.append("- {} compatible={} status={} reg={}".format(n["path"],n["compatible"],n["status"],n["reg_cells"]))
     lines += ["","## DTBO DSP device nodes",""]
     if device_tree_overlay:
         lines.append("DTBO entries: {}; total declared bytes: {}".format(device_tree_overlay["entry_count"],device_tree_overlay["total_size"]))
