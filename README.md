@@ -53,6 +53,7 @@ Document retention and recreate large derived trees from immutable inputs and sc
 - [Firmware import from the private source repository](docs/FIRMWARE_IMPORT.md)
 - [Phase 1 status and exit criteria](docs/PHASE1_STATUS.md)
 - [MT8163 audio stack — first-pass findings](reports/MT8163_AUDIO_STACK_FIRST_PASS.md)
+- [CD3313 module variant comparison](reports/CD3313_MODULE_VARIANT_DIFF.md)
 - [Audio stack inventory script](scripts/firmware/audio_stack_inventory.py)
 - [Latest static audio inventory run](https://github.com/14vvp93/public_calculations/actions/runs/43206552330)
 
