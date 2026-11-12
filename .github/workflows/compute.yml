@@ -86,7 +86,7 @@ jobs:
       - name: Reassemble split ZIP volumes and extract safely
         if: inputs.task == 'extract' || github.event_name == 'push'
         env:
-          ARCHIVE_DIRECTORY: ${{ inputs.archive_directory }}
+          ARCHIVE_DIRECTORY: ${{ inputs.archive_directory || 'firmware/archives/mt8163' }}
         run: |
           set -euo pipefail
           mkdir -p output/extracted
