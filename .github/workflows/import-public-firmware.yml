@@ -83,6 +83,16 @@ jobs:
             install -m 0644 -- "$kernel" firmware/dumps/mt8163/kernel/cd3313.ko
           fi
 
+      - name: Enforce Git blob size limit
+        run: |
+          set -euo pipefail
+          large="$(find firmware/archives/mt8163 firmware/dumps/mt8163 -type f -size +95M -print)"
+          if [ -n "$large" ]; then
+            echo "::error::Files exceed the conservative 95 MiB ordinary Git blob limit:"
+            printf '%s\n' "$large"
+            exit 2
+          fi
+
       - name: Build source and file integrity manifest
         env:
           SOURCE_REF: ${{ inputs.source_ref }}
