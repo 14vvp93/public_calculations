@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - firmware/EXTRACT_APPROVED
+      - firmware/AUDIO_ANALYSIS_APPROVED
   workflow_dispatch:
     inputs:
       task:
@@ -15,6 +16,7 @@ on:
           - inventory
           - extract
           - all-light
+          - audio-inventory
       archive_directory:
         description: Archive directory under firmware/archives (used for extraction)
         required: false
@@ -55,10 +57,10 @@ jobs:
           RETENTION: ${{ inputs.retention_days || '14' }}
         run: |
           set -euo pipefail
-          case "$TASK" in inventory|extract|all-light) ;; *) echo "Invalid task"; exit 2;; esac
+          case "$TASK" in inventory|extract|all-light|audio-inventory) ;; *) echo "Invalid task"; exit 2;; esac
           case "$RETENTION" in ''|*[!0-9]*) echo "Invalid retention"; exit 2;; esac
           if [ "$RETENTION" -lt 1 ] || [ "$RETENTION" -gt 30 ]; then echo "Retention must be 1..30"; exit 2; fi
-          if [ "$TASK" = "extract" ]; then
+          if [ "$TASK" = "extract" ] || [ "$TASK" = "audio-inventory" ]; then
             case "$ARCHIVE_DIRECTORY" in firmware/archives/*) ;; *) echo "Archive directory must be under firmware/archives"; exit 2;; esac
             case "$ARCHIVE_DIRECTORY" in *..*|/*) echo "Unsafe archive directory"; exit 2;; esac
             resolved="$(realpath -e -- "$ARCHIVE_DIRECTORY")"
@@ -71,7 +73,7 @@ jobs:
           fi
 
       - name: Inventory original archive files
-        if: inputs.task == 'inventory' || inputs.task == 'all-light' || github.event_name == 'push' || inputs.task == 'extract'
+        if: inputs.task == 'inventory' || inputs.task == 'all-light' || github.event_name == 'push' || inputs.task == 'extract' || inputs.task == 'audio-inventory'
         run: |
           set -euo pipefail
           mkdir -p output
@@ -84,7 +86,7 @@ jobs:
           fi
 
       - name: Reassemble split ZIP volumes and extract safely
-        if: inputs.task == 'extract' || github.event_name == 'push'
+        if: inputs.task == 'extract' || inputs.task == 'audio-inventory' || github.event_name == 'push'
         env:
           ARCHIVE_DIRECTORY: ${{ inputs.archive_directory || 'firmware/archives/mt8163' }}
         run: |
@@ -95,6 +97,16 @@ jobs:
             --extract-root output/extracted \
             --json output/archive-manifest.json \
             --markdown output/archive-inventory.md
+
+      - name: Analyze Android audio stack and DSP modules
+        if: inputs.task == 'audio-inventory' || github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          python scripts/firmware/audio_stack_inventory.py \
+            --extracted-root output/extracted \
+            --dump-root firmware/dumps/mt8163 \
+            --json output/audio-stack-inventory.json \
+            --markdown output/audio-stack-report.md
 
       - name: Upload results
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
