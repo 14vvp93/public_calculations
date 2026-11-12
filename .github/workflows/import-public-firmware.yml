@@ -54,34 +54,23 @@ jobs:
           path: source
           persist-credentials: false
 
-      - name: Import approved firmware inputs
+      - name: Import and verify approved firmware inputs
         env:
           INCLUDE_RAW: ${{ inputs.include_raw_dumps }}
+          SOURCE_REF: ${{ inputs.source_ref }}
         run: |
           set -euo pipefail
-          src="$GITHUB_WORKSPACE/source/reference-materials/firmware-dumps"
-          test -d "$src"
-          mkdir -p firmware/archives/mt8163 firmware/dumps/mt8163
-          while IFS= read -r -d '' file; do
-            name="$(basename "$file")"
-            case "$name" in
-              *.zip|*.zip.*) dest="firmware/archives/mt8163/$name" ;;
-              *) if [ "$INCLUDE_RAW" = "true" ]; then dest="firmware/dumps/mt8163/$name"; else continue; fi ;;
-            esac
-            install -m 0644 -- "$file" "$dest"
-          done < <(find "$src" -maxdepth 1 -type f -print0)
-
-          heq="$GITHUB_WORKSPACE/source/reference-materials/heq"
-          if [ -d "$heq" ]; then
-            mkdir -p firmware/archives/mt8163/HEQ
-            find "$heq" -maxdepth 1 -type f -name 'HEQ.zip.*' -exec install -m 0644 -- {} firmware/archives/mt8163/HEQ/ \;
+          args=(
+            --source-root source
+            --destination-root .
+            --source-repository 14march93/mt8163_audio_engine
+            --source-ref "$SOURCE_REF"
+            --source-commit "$(git -C source rev-parse HEAD)"
+          )
+          if [ "$INCLUDE_RAW" = "true" ]; then
+            args+=(--include-raw-dumps)
           fi
-
-          kernel="$GITHUB_WORKSPACE/source/reference-materials/kernel/cd3313.ko"
-          if [ -f "$kernel" ]; then
-            mkdir -p firmware/dumps/mt8163/kernel
-            install -m 0644 -- "$kernel" firmware/dumps/mt8163/kernel/cd3313.ko
-          fi
+          python scripts/firmware/import_public_firmware.py "${args[@]}"
 
       - name: Enforce Git blob size limit
         run: |
@@ -92,17 +81,6 @@ jobs:
             printf '%s\n' "$large"
             exit 2
           fi
-
-      - name: Build source and file integrity manifest
-        env:
-          SOURCE_REF: ${{ inputs.source_ref }}
-        run: |
-          set -euo pipefail
-          python scripts/firmware/build_source_manifest.py \
-            --source-repository 14march93/mt8163_audio_engine \
-            --source-ref "$SOURCE_REF" \
-            --source-commit "$(git -C source rev-parse HEAD)" \
-            --output firmware/manifests/mt8163-source-import.json
 
       - name: Commit imported public inputs
         env:
