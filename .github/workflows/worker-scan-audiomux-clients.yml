@@ -32,15 +32,14 @@ jobs:
       - name: Extract archive and inventory files
         run: |
           test -d worker/firmware/extracted
-          mkdir -p audiomux-client-scan/input audiomux-client-scan/reports
-          cp -a worker/firmware/extracted/. audiomux-client-scan/input/
-          find audiomux-client-scan/input -type f -print0 | sort -z |
+          mkdir -p audiomux-client-scan/reports
+          find worker/firmware/extracted -type f -print0 | sort -z |
             xargs -0 file > audiomux-client-scan/reports/file-inventory.txt
 
       - name: Scan text and binary strings for device and ioctl references
         run: |
           set +e
-          ROOT=audiomux-client-scan/input
+          ROOT=worker/firmware/extracted
           OUT=audiomux-client-scan/reports
           rg -a -n -i -C 2 'audiomux|cd3313|dsp_i2c_driver|STATUS_WRITE_CMD|STATUS_READ_CMD|ioctl[[:space:]]*\(' "$ROOT" > "$OUT/text-and-source-matches.txt"
           : > "$OUT/binary-string-matches.txt"
