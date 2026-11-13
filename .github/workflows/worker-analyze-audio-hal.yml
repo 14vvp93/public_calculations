@@ -39,7 +39,7 @@ jobs:
 
       - name: Analyze primary HAL symbols and relocations
         run: |
-          SO=audio-hal-analysis/input/files/vendor/lib/hw/audio.primary.mt8163.so
+          SO=worker/firmware/extracted/vendor/lib/hw/audio.primary.mt8163.so
           arm-linux-gnueabi-readelf -h "$SO" > audio-hal-analysis/reports/primary-elf-header.txt
           arm-linux-gnueabi-readelf -SW -l "$SO" > audio-hal-analysis/reports/primary-sections-and-segments.txt
           arm-linux-gnueabi-readelf -Ws "$SO" | c++filt > audio-hal-analysis/reports/primary-symbols-demangled.txt
@@ -105,7 +105,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
-          root=Path("audio-hal-analysis/input/files")
+          root=Path("worker/firmware/extracted")
           out=[]
           for p in sorted(root.rglob("*.xml")):
             try:
