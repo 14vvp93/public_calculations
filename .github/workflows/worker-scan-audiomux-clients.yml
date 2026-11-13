@@ -1,6 +1,7 @@
 name: Scan extracted firmware for CD3313 userspace clients
 
 on:
+  workflow_dispatch:
   workflow_call:
 permissions:
   contents: read
