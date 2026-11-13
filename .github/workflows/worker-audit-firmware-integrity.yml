@@ -1,6 +1,7 @@
 name: Audit public extracted firmware integrity
 
 on:
+  workflow_dispatch:
   workflow_call:
 
 permissions:
