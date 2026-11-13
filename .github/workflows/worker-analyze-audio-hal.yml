@@ -1,6 +1,7 @@
 name: Analyze MT8163 audio HAL from extracted firmware
 
 on:
+  workflow_dispatch:
   workflow_call:
 permissions:
   contents: read
