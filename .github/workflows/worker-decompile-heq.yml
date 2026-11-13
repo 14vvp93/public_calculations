@@ -6,6 +6,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: public-worker-worker-decompile-heq-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   decompile:
     runs-on: ubuntu-24.04
