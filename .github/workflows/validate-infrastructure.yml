@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: validate-infrastructure-${{ github.ref }}
+  group: validate-infrastructure-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
