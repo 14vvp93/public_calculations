@@ -49,9 +49,9 @@ jobs:
                   raise SystemExit(f"SHA-256 mismatch: {path}")
           print(f"Verified {len(entries)} extracted firmware files ({manifest['total_bytes']} bytes)")
           PY
-          mkdir -p firmware-analysis/firmware-dumps
-          cp -a worker/firmware/extracted/. firmware-analysis/
-          cp -a worker/firmware/dumps/mt8163/. firmware-analysis/firmware-dumps/
+          mkdir -p firmware-analysis
+          ln -s "$PWD/worker/firmware/extracted" firmware-analysis/extracted
+          ln -s "$PWD/worker/firmware/dumps/mt8163" firmware-analysis/firmware-dumps
       - name: Build pinned VDEX extractor
         shell: bash
         run: |
@@ -69,7 +69,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VDEX="$(find firmware-analysis -type f -name boot-carservices.vdex -print -quit)"
+          VDEX="$(find -L firmware-analysis -type f -name boot-carservices.vdex -print -quit)"
           test -n "$VDEX"
           mkdir -p firmware-analysis/carservices-vdex
           cp "$VDEX" firmware-analysis/carservices-vdex/boot-carservices.vdex
@@ -96,7 +96,7 @@ jobs:
           echo "Firmware native-library scan" >> "$report"
           echo "Generated: $(date -u +%FT%TZ)" >> "$report"
           echo >> "$report"
-          find firmware-analysis -type f \( -name '*.so' -o -name '*.so.*' -o -name '*.ko' \) -print0 |
+          find -L firmware-analysis -type f \( -name '*.so' -o -name '*.so.*' -o -name '*.ko' \) -print0 |
           while IFS= read -r -d '' f; do
             {
               echo "===== $f ====="
@@ -112,14 +112,14 @@ jobs:
               echo
             } >> "$report"
           done
-          echo "Scanned $(find firmware-analysis -type f \( -name '*.so' -o -name '*.so.*' -o -name '*.ko' \) | wc -l) native objects" >> "$report"
+          echo "Scanned $(find -L firmware-analysis -type f \( -name '*.so' -o -name '*.so.*' -o -name '*.ko' \) | wc -l) native objects" >> "$report"
           cat "$report"
 
       - name: Produce a compact report for the paired CD3313 module
         shell: bash
         run: |
           set -euo pipefail
-          MODULE="$(find firmware-analysis -type f -path '*/vendor/lib/modules/cd3313.ko' -print -quit)"
+          MODULE="$(find -L firmware-analysis -type f -path '*/vendor/lib/modules/cd3313.ko' -print -quit)"
           test -n "$MODULE"
           OUT=firmware-analysis/cd3313-current
           mkdir -p "$OUT"
@@ -148,7 +148,7 @@ jobs:
           set -euo pipefail
           OUT=firmware-analysis/board-audio-routing
           mkdir -p "$OUT/decompiled-dtb"
-          find firmware-analysis -type f \
+          find -L firmware-analysis -type f \
             \( -iname '*.dts' -o -iname '*.dtsi' -o -iname '*.dtb' -o -iname '*.dtbo' \
                -o -iname '*.xml' -o -iname '*.conf' -o -iname '*.ini' -o -iname '*.cfg' \
                -o -iname '*.rc' -o -iname '*.prop' -o -iname '*.mk' \) \
@@ -210,7 +210,7 @@ jobs:
           print(f"Scanned {scanned} text configuration files; found {matches} matching lines; attempted {dtb_index} DTB/DTBO conversions")
           PY
 
-          find firmware-analysis -type f \
+          find -L firmware-analysis -type f \
             \( -iname '*.ko' -o -iname '*.dtb' -o -iname '*.dtbo' -o -iname '*audio*policy*' \
                -o -iname '*audio*platform*' -o -iname '*audio*config*' \) \
             ! -path '*/board-audio-routing/*' -print | sort > "$OUT/audio-and-device-tree-binaries.txt"
@@ -253,7 +253,7 @@ jobs:
                   f.write(f"{name} ({size} bytes)\n")
           print(f"Copied {len(found)} targeted audio/policy configuration files")
           PY
-          find firmware-analysis -type f \
+          find -L firmware-analysis -type f \
             \( -iname 'boot*.img' -o -iname 'dtbo*' -o -iname '*dtb*' -o -iname '*.img' \
                -o -iname 'lk.bin' -o -iname 'preloader*' \) \
             ! -path '*/board-audio-routing/*' -print | sort > "$OUT/boot-and-dtb-image-candidates.txt"
@@ -561,7 +561,10 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: firmware-library-analysis
-          path: firmware-analysis/
+          path: |
+            firmware-analysis/NATIVE_AUDIO_SCAN.txt
+            firmware-analysis/carservices-vdex/
+            firmware-analysis/cd3313-current/
           if-no-files-found: error
           retention-days: 14
 
