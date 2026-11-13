@@ -1,6 +1,7 @@
 name: Analyze CD3313 kernel module
 
 on:
+  workflow_dispatch:
   workflow_call:
 permissions:
   contents: read
