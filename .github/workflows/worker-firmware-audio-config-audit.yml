@@ -6,6 +6,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: public-worker-worker-firmware-audio-config-audit-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   inspect-curated-firmware:
     runs-on: ubuntu-24.04
