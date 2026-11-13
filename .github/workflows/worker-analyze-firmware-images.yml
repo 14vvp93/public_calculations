@@ -1,6 +1,7 @@
 name: Analyze MT8163 firmware images
 
 on:
+  workflow_dispatch:
   workflow_call:
 permissions:
   contents: read
