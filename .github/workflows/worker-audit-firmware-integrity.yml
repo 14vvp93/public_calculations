@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: public-worker-worker-audit-firmware-integrity-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify-firmware:
     runs-on: ubuntu-24.04
