@@ -34,7 +34,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: public-compute-${{ github.repository }}-${{ inputs.task || 'verify' }}
+  group: public-compute-${{ github.repository }}-${{ github.ref }}-${{ inputs.task || 'verify' }}
   cancel-in-progress: true
 
 jobs:
