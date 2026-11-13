@@ -68,55 +68,81 @@ jobs:
           test -d worker/firmware/extracted/system
           test -d worker/firmware/extracted/vendor
 
-      - name: Inventory canonical firmware files
+      - name: Inventory firmware and verify manifest in one pass
         if: inputs.task == 'inventory' || inputs.task == 'all-light' || inputs.task == 'verify' || inputs.task == 'audio-inventory'
+        env:
+          TASK: ${{ inputs.task || 'verify' }}
         run: |
           set -euo pipefail
           mkdir -p output
           python3 - <<'PY'
           from pathlib import Path
-          import hashlib, json
-          roots = [Path("worker/firmware/extracted"), Path("worker/firmware/dumps/mt8163")]
+          import hashlib
+          import json
+          import os
+
+          worker = Path("worker")
+          task = os.environ["TASK"]
+          verify = task in {"verify", "audio-inventory"}
+          manifest = None
+          expected = {}
+          failures = []
+          if verify:
+              manifest = json.loads((worker / "firmware/manifests/mt8163-extracted.json").read_text())
+              expected = {item["path"]: item for item in manifest["files"]}
+
+          roots = [worker / "firmware/extracted", worker / "firmware/dumps/mt8163"]
           rows = []
+          seen_extracted = set()
+          verified_count = 0
+
           for root in roots:
               if not root.exists():
                   continue
               for path in sorted(p for p in root.rglob("*") if p.is_file()):
-                  h = hashlib.sha256()
+                  digest = hashlib.sha256()
                   with path.open("rb") as stream:
-                      for block in iter(lambda: stream.read(1024 * 1024), b""):
-                          h.update(block)
-                  rows.append({"path": path.as_posix(), "size": path.stat().st_size, "sha256": h.hexdigest()})
-          result = {"file_count": len(rows), "total_bytes": sum(x["size"] for x in rows), "files": rows}
-          Path("output/firmware-inventory.json").write_text(json.dumps(result, indent=2) + "\n")
-          print(f"Inventoried {len(rows)} public firmware files ({result['total_bytes']} bytes)")
-          PY
+                      for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                          digest.update(chunk)
+                  relative = path.relative_to(worker).as_posix()
+                  size = path.stat().st_size
+                  sha256 = digest.hexdigest()
+                  rows.append({"path": path.as_posix(), "size": size, "sha256": sha256})
 
-      - name: Verify extracted firmware against SHA-256 manifest
-        if: inputs.task == 'verify' || inputs.task == 'audio-inventory'
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import hashlib, json
-          root = Path("worker")
-          manifest = json.loads((root / "firmware/manifests/mt8163-extracted.json").read_text())
-          entries = manifest["files"]
-          failures = []
-          for item in entries:
-              path = root / item["path"]
-              if not path.is_file() or path.stat().st_size != item["size"]:
-                  failures.append(item["path"])
-                  continue
-              h = hashlib.sha256()
-              with path.open("rb") as stream:
-                  for block in iter(lambda: stream.read(1024 * 1024), b""):
-                      h.update(block)
-              if h.hexdigest() != item["sha256"]:
-                  failures.append(item["path"])
-          if len(entries) != manifest["file_count"] or failures:
-              raise SystemExit(f"Firmware integrity failed: {len(failures)} mismatches")
-          print(f"SHA-256 verified {len(entries)} extracted firmware files")
+                  if verify and root == worker / "firmware/extracted":
+                      seen_extracted.add(relative)
+                      item = expected.get(relative)
+                      if item is None:
+                          failures.append(f"UNMANIFESTED {relative}")
+                      elif size != item["size"] or sha256 != item["sha256"]:
+                          failures.append(f"INTEGRITY_MISMATCH {relative}")
+                      else:
+                          verified_count += 1
+
+          if verify:
+              for missing in sorted(set(expected) - seen_extracted):
+                  failures.append(f"MISSING {missing}")
+              if len(expected) != manifest["file_count"]:
+                  failures.append("MANIFEST_FILE_COUNT_MISMATCH")
+
+          integrity = {
+              "status": ("failed" if failures else "passed") if verify else "not_requested",
+              "verified_file_count": verified_count,
+              "failure_count": len(failures),
+              "failures": failures,
+          }
+          result = {
+              "file_count": len(rows),
+              "total_bytes": sum(item["size"] for item in rows),
+              "files": rows,
+              "integrity": integrity,
+          }
+          Path("output/firmware-inventory.json").write_text(json.dumps(result, indent=2) + "\\n")
+          print(f"Inventoried {len(rows)} public firmware files ({result['total_bytes']} bytes)")
+          if verify:
+              print(f"SHA-256 verified {verified_count}/{len(expected)} extracted firmware files")
+              if failures:
+                  raise SystemExit(f"Firmware integrity failed: {len(failures)} mismatches")
           PY
 
       - name: Analyze Android audio stack and DSP modules
