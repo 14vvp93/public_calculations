@@ -1,6 +1,7 @@
 name: Focused CD3313 ioctl ABI analysis
 
 on:
+  workflow_dispatch:
   workflow_call:
 permissions:
   contents: read
