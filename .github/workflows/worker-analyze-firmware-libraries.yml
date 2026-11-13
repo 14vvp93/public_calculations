@@ -6,6 +6,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: public-worker-worker-analyze-firmware-libraries-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   reassemble-and-analyze:
     runs-on: ubuntu-24.04
